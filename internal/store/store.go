@@ -151,14 +151,23 @@ func (s *Store) withTx(ctx context.Context, fn func(*sql.Tx) error) error {
 func (s *Store) LookupToken(ctx context.Context, tokenPlain string) (types.Token, error) {
 	var t types.Token
 	var ledger sql.NullString
+	var ledgerSlug sql.NullString
 	var created string
-	err := s.db.QueryRowContext(ctx, `SELECT id, actor, owner_id, ledger_id, role, created_at FROM tokens WHERE token_hash = ?`,
-		HashToken(tokenPlain)).Scan(&t.ID, &t.Actor, &t.OwnerID, &ledger, &t.Role, &created)
+	err := s.db.QueryRowContext(ctx, `
+		SELECT t.id, t.actor, t.owner_id, t.ledger_id, t.role, t.created_at, o.slug, l.slug
+		FROM tokens t
+		JOIN owners o ON o.id = t.owner_id
+		LEFT JOIN ledgers l ON l.id = t.ledger_id
+		WHERE t.token_hash = ?`, HashToken(tokenPlain)).
+		Scan(&t.ID, &t.Actor, &t.OwnerID, &ledger, &t.Role, &created, &t.OwnerSlug, &ledgerSlug)
 	if err != nil {
 		return t, err
 	}
 	if ledger.Valid {
 		t.LedgerID = ledger.String
+	}
+	if ledgerSlug.Valid {
+		t.LedgerSlug = ledgerSlug.String
 	}
 	t.CreatedAt = parseTime(created)
 	return t, nil

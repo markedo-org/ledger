@@ -16,8 +16,8 @@ and is not the series.
 2. HTML live view, read-only in v1.
 3. Skill: conventions (do not edit the snapshot, claim before you work, bearer
    token, this repo's owner/ledger).
-4. MCP, Streamable HTTP, over the same domain layer. Copy-paste attach path.
-   Not stdio. Not a CLI wrapper.
+4. MCP, Streamable HTTP at `/mcp`, over the same domain layer. Copy-paste attach
+   path. Not stdio. Not a CLI wrapper. See `docs/mcp.md`.
 5. CLI later, as an HTTP client.
 
 URLs:
@@ -60,3 +60,9 @@ strings.
 
 Ask an agent. Do not make the markdown snapshot writable to paper over a missing
 form.
+
+## Hosting
+
+The hosted app runs on VPS **Services** (`62.238.47.32`, `services.markedo.com`),
+not on the Markedo website box. The registered task-ledger domain already points
+there. Where the marketing site lives is open and can change.

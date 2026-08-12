@@ -11,6 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/markedo-org/ledger/internal/app"
+	"github.com/markedo-org/ledger/internal/mcpserver"
+	"github.com/markedo-org/ledger/internal/render"
 	"github.com/markedo-org/ledger/internal/types"
 )
 
@@ -45,7 +47,7 @@ func (s *Server) Engine() *gin.Engine {
 	})
 	r.GET("/", func(c *gin.Context) {
 		c.Header("Content-Type", "text/plain; charset=utf-8")
-		c.String(http.StatusOK, "task-ledger\n\nLive view: /{owner}/{ledger}\nSnapshot:  /{owner}/{ledger}.md\nAPI:       /v1/{owner}/{ledger}/tasks\n")
+		c.String(http.StatusOK, "task-ledger\n\nLive view: /{owner}/{ledger}\nSnapshot:  /{owner}/{ledger}.md\nAPI:       /v1/{owner}/{ledger}/tasks\nMCP:       /mcp  (Streamable HTTP, bearer token)\n")
 	})
 	r.GET("/static/*filepath", func(c *gin.Context) {
 		p := strings.TrimPrefix(c.Param("filepath"), "/")
@@ -65,6 +67,10 @@ func (s *Server) Engine() *gin.Engine {
 	v1.POST("/:owner/:ledger/tasks/:handle/close", s.close)
 	v1.POST("/:owner/:ledger/tasks/:handle/verify", s.verify)
 	v1.POST("/:owner/:ledger/next", s.next)
+
+	mcpH := mcpserver.Handler(s.App)
+	r.Any("/mcp", gin.WrapH(mcpH))
+	r.Any("/mcp/*path", gin.WrapH(mcpH))
 
 	r.GET("/:owner/:ledger", s.htmlLedger)
 	r.GET("/:owner/:ledger/:handle", s.htmlTask)
@@ -417,5 +423,5 @@ func (s *Server) markdown(c *gin.Context, owner, ledger string) {
 		return
 	}
 	c.Header("Content-Type", "text/markdown; charset=utf-8")
-	c.String(http.StatusOK, RenderMarkdown(l, tasks, c.Request.Host))
+	c.String(http.StatusOK, render.Markdown(l, tasks, c.Request.Host))
 }

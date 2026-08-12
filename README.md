@@ -58,6 +58,22 @@ field on the body. Idempotency: JSON `idempotency_key` or header `Idempotency-Ke
 Handles are `T-001` (one-letter series, default `T`). Default lease is 30
 minutes; pass `ttl_seconds` to ask for longer, up to 24 hours.
 
+## MCP
+
+Streamable HTTP at `/mcp`, same bearer token. Stateless. Official Go SDK v1.2.0,
+protocol 2025-06-18. See [`docs/mcp.md`](docs/mcp.md).
+
+```json
+{
+  "mcpServers": {
+    "task-ledger": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer lgr_dev" }
+    }
+  }
+}
+```
+
 ## Layout
 
 | Path | What |
@@ -65,7 +81,10 @@ minutes; pass `ttl_seconds` to ask for longer, up to 24 hours.
 | `cmd/ledger/` | Server binary |
 | `internal/app/` | Domain operations |
 | `internal/store/` | SQLite |
-| `internal/web/` | HTTP API, HTML, markdown |
+| `internal/web/` | HTTP API, HTML |
+| `internal/mcpserver/` | Streamable HTTP MCP |
+| `docs/design.md` | Settled v1 cut |
+| `docs/mcp.md` | MCP endpoint, auth, tools |
 | `docs/design.md` | Settled v1 cut |
 | `.agents/skills/task-ledger/` | Agent skill |
 

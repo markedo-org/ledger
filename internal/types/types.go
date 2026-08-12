@@ -81,12 +81,14 @@ type Series struct {
 }
 
 type Token struct {
-	ID        string
-	Actor     string
-	OwnerID   string
-	LedgerID  string // empty means all ledgers for the owner
-	Role      string
-	CreatedAt time.Time
+	ID         string
+	Actor      string
+	OwnerID    string
+	OwnerSlug  string
+	LedgerID   string // empty means all ledgers for the owner
+	LedgerSlug string
+	Role       string
+	CreatedAt  time.Time
 }
 
 type Task struct {

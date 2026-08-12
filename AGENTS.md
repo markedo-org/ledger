@@ -17,6 +17,7 @@ This file is the router. Read linked files when the task needs them.
 | Need | Look here |
 | --- | --- |
 | Settled design | `docs/design.md` |
+| MCP | `docs/mcp.md` |
 | Agent skill (conventions) | `.agents/skills/task-ledger/` |
 | Server entry | `cmd/ledger/` |
 
@@ -25,8 +26,8 @@ This file is the router. Read linked files when the task needs them.
 1. **The HTTP API is the system.** HTML, the skill, MCP, and a future CLI are
    clients of the domain layer. Do not put business logic in transport handlers.
 2. **No whole-object writes.** Intent-shaped operations only.
-3. **No stdio MCP wrapping a CLI.** If MCP is added, it is Streamable HTTP over
-   the same domain layer.
+3. **MCP is Streamable HTTP at `/mcp`.** Same bearer token as the API. Not stdio,
+   never a facade over a CLI.
 4. **Markdown is a snapshot, never a write path.** Never parse `TASKS.md` back in.
 5. **Do not invent product facts.** Behaviour comes from `docs/design.md` and the
    code.

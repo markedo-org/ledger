@@ -55,5 +55,18 @@ POST /v1/markedo/markedo-meta/tasks/T-001/close
 Live view: `http://127.0.0.1:8080/markedo/markedo-meta`
 Snapshot: `http://127.0.0.1:8080/markedo/markedo-meta.md`
 
-MCP (Streamable HTTP) is not shipped yet. Do not wrap the `ledger` binary in a
-local stdio MCP server.
+MCP (Streamable HTTP) is at `http://127.0.0.1:8080/mcp` with the same bearer
+token. Prefer those tools over curl once the harness has them attached. Config:
+
+```json
+{
+  "mcpServers": {
+    "task-ledger": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer lgr_dev" }
+    }
+  }
+}
+```
+
+Do not wrap the `ledger` binary in a local stdio MCP server.
