@@ -37,6 +37,6 @@ This file is the router. Read linked files when the task needs them.
 make build
 make test
 make lint
-./ledger -listen 127.0.0.1:8080
+LEDGER_BOOT_TOKEN=lgr_dev ./ledger -listen 127.0.0.1:8080 -db ledger.sqlite
 ./ledger -version
 ```

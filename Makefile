@@ -11,7 +11,7 @@ build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/ledger
 
 run: build
-	./$(BINARY) -listen 127.0.0.1:8080
+	./$(BINARY) -listen 127.0.0.1:8080 -db ledger.sqlite
 
 test:
 	go test ./...

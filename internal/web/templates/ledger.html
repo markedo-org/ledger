@@ -1,0 +1,32 @@
+{{define "ledger"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand"><a href="/{{.Owner}}/{{.Ledger}}">{{.Owner}}/{{.Ledger}}</a></h1>
+  <div class="meta">task-ledger · live</div>
+  <p>Read-only view of live state. The write path is the API. Do not edit a markdown snapshot.</p>
+</header>
+<p class="notice">Claims, leases, and who is on what live here. They do not belong in git.</p>
+{{range .Phases}}
+  <h2 class="phase">{{.Name}}</h2>
+  {{if .Tasks}}
+  <ol class="register">
+    {{range .Tasks}}
+    <li class="{{if .Claimed}}claimed{{end}}">
+      <a class="handle" href="/{{$.Owner}}/{{$.Ledger}}/{{.Handle}}">{{.Handle}}</a>
+      <div>
+        <p class="title">{{.Title}}</p>
+        <p class="row-meta">
+          {{if .Size}}size {{.Size}} · {{end}}
+          {{if .Claimed}}<span class="pill">held by {{.ClaimedBy}} until {{.ClaimUntil}}</span>{{end}}
+          {{if .Pushed}}pushed {{.Pushed}}{{end}}
+        </p>
+      </div>
+    </li>
+    {{end}}
+  </ol>
+  {{else}}
+  <p class="empty">None.</p>
+  {{end}}
+{{end}}
+{{template "foot" .}}
+{{end}}
