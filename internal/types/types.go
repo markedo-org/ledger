@@ -80,6 +80,12 @@ type Series struct {
 	NextN    int
 }
 
+const (
+	RoleWrite    = "write"
+	RoleAdmin    = "admin"
+	RoleOperator = "operator"
+)
+
 type Token struct {
 	ID         string
 	Actor      string
@@ -88,8 +94,11 @@ type Token struct {
 	LedgerID   string // empty means all ledgers for the owner
 	LedgerSlug string
 	Role       string
+	Email      string
 	CreatedAt  time.Time
 }
+
+func (t Token) IsOperator() bool { return t.Role == RoleOperator }
 
 type Task struct {
 	ID           string
@@ -146,4 +155,40 @@ type Event struct {
 	Kind      string
 	Payload   string
 	CreatedAt time.Time
+}
+
+type Session struct {
+	ID          string
+	Actor       string
+	GitHubID    string
+	GitHubLogin string
+	OwnerSlug   string
+	LedgerSlug  string
+	Role        string
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+}
+
+func (s Session) IsOperator() bool {
+	if s.Role == RoleOperator {
+		return true
+	}
+	// GitHub allowlist sessions are host-wide and have no owner binding.
+	return s.GitHubLogin != "" && s.OwnerSlug == ""
+}
+
+// Covers reports whether this HTML session may see owner/ledger.
+// An empty OwnerSlug is an operator session (GitHub allowlist) and sees all.
+// A ledger binding is ignored when ledger is empty (owner index).
+func (s Session) Covers(owner, ledger string) bool {
+	if s.OwnerSlug == "" {
+		return true
+	}
+	if owner != "" && s.OwnerSlug != owner {
+		return false
+	}
+	if s.LedgerSlug != "" && ledger != "" && s.LedgerSlug != ledger {
+		return false
+	}
+	return true
 }

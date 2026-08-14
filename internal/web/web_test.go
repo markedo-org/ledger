@@ -31,7 +31,7 @@ func TestCreateAndHTML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := srv.Engine()
+	e := srv.Handler()
 
 	body := bytes.NewBufferString(`{"title":"Ship the slice","idempotency_key":"s1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks", body)
@@ -50,11 +50,37 @@ func TestCreateAndHTML(t *testing.T) {
 		t.Fatalf("handle %#v", created["handle"])
 	}
 
+	body = bytes.NewBufferString(`{"title":"No key"}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing key %d %s", rec.Code, rec.Body.String())
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("T-001")) {
 		t.Fatalf("html %d %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`class="row" href="/markedo/meta/T-001"`)) {
+		t.Fatalf("board row link missing: %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`id="theme-flip"`)) {
+		t.Fatalf("theme flip missing: %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`/static/badge.svg`)) {
+		t.Fatalf("badge missing: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/static/badge.svg", nil)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("#1A2B22")) {
+		t.Fatalf("badge static %d %s", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/markedo/meta.md", nil)
@@ -62,5 +88,48 @@ func TestCreateAndHTML(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("do not edit")) {
 		t.Fatalf("md %d %s", rec.Code, rec.Body.String())
+	}
+
+	body = bytes.NewBufferString(`{"title":"Checks","idempotency_key":"c1","checks":["API"]}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create checks %d %s", rec.Code, rec.Body.String())
+	}
+	body = bytes.NewBufferString(`{"n":1,"done":true}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks/T-002/checks", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte(`"done":true`)) {
+		t.Fatalf("tick %d %s", rec.Code, rec.Body.String())
+	}
+
+	body = bytes.NewBufferString(`{"body":"looks good"}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks/T-002/notes", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("note %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("1 note")) || !bytes.Contains(rec.Body.Bytes(), []byte("1/1 checks")) {
+		t.Fatalf("board meta %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta/T-002", nil)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte(`class="done"`)) || !bytes.Contains(rec.Body.Bytes(), []byte("looks good")) {
+		t.Fatalf("task page %d %s", rec.Code, rec.Body.String())
 	}
 }

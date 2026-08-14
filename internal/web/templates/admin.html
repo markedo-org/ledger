@@ -1,0 +1,92 @@
+{{define "admin"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand">{{template "mark"}}admin</h1>
+  <div class="meta">task-ledger · provision {{template "appearance"}}</div>
+  <p>Host-level. Create owners, mint the first token, and set max_ledgers. Same process as the live view.</p>
+</header>
+{{if .Message}}<p class="notice">{{.Message}}</p>{{end}}
+{{if .Issued}}
+<p class="notice">Bearer token (shown once): <code class="issued">{{.Issued}}</code></p>
+{{end}}
+
+<h2 class="phase">Owners</h2>
+{{if .Owners}}
+<ol class="register">
+  {{range .Owners}}
+  <li>
+    <div class="row">
+      <span class="handle">{{.Slug}}</span>
+      <span class="row-main">
+        <span class="title">max_ledgers {{.MaxLedgers}}</span>
+        <span class="row-meta">{{range $i, $l := .Ledgers}}{{if $i}} · {{end}}<a href="/{{.Slug}}/{{$l.Slug}}">{{$l.Slug}}</a>{{if $l.Frozen}} (read-only){{end}}{{end}}</span>
+      </span>
+    </div>
+  </li>
+  {{end}}
+</ol>
+{{else}}
+<p class="empty">None.</p>
+{{end}}
+
+<h2 class="phase">Create owner</h2>
+<form class="signin" method="post" action="/admin">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create_owner">
+  <label for="slug">Owner slug</label>
+  <input id="slug" name="slug" required pattern="[a-z][a-z0-9-]{0,62}">
+  <label for="max_ledgers">max_ledgers (blank is 1)</label>
+  <input id="max_ledgers" name="max_ledgers" inputmode="numeric" placeholder="1">
+  <label for="ledger">First ledger (optional)</label>
+  <input id="ledger" name="ledger" pattern="[a-z][a-z0-9-]{0,62}">
+  <label for="title">Ledger title (optional)</label>
+  <input id="title" name="title">
+  <label for="actor">Admin actor to mint (optional)</label>
+  <input id="actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}">
+  <label for="owner-email">Email for magic-link (optional)</label>
+  <input id="owner-email" name="email" type="email">
+  <button type="submit">Create owner</button>
+</form>
+
+<h2 class="phase">Set max_ledgers</h2>
+<form class="signin" method="post" action="/admin">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="set_max">
+  <label for="set-owner">Owner slug</label>
+  <input id="set-owner" name="owner" required>
+  <label for="set-max">max_ledgers</label>
+  <input id="set-max" name="max_ledgers" required inputmode="numeric">
+  <button type="submit">Set cap</button>
+</form>
+
+<h2 class="phase">Create ledger</h2>
+<form class="signin" method="post" action="/admin">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create_ledger">
+  <label for="led-owner">Owner slug</label>
+  <input id="led-owner" name="owner" required>
+  <label for="led-slug">Ledger slug</label>
+  <input id="led-slug" name="slug" required>
+  <label for="led-title">Title (optional)</label>
+  <input id="led-title" name="title">
+  <button type="submit">Create ledger</button>
+</form>
+
+<h2 class="phase">Mint token</h2>
+<form class="signin" method="post" action="/admin">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="action" value="create_token">
+  <label for="tok-owner">Owner slug</label>
+  <input id="tok-owner" name="owner" required>
+  <label for="tok-actor">Actor</label>
+  <input id="tok-actor" name="actor" required>
+  <label for="tok-ledger">Ledger (optional; empty is owner-wide)</label>
+  <input id="tok-ledger" name="ledger">
+  <label for="tok-role">Role (write or admin)</label>
+  <input id="tok-role" name="role" placeholder="admin">
+  <label for="tok-email">Email for magic-link (optional)</label>
+  <input id="tok-email" name="email" type="email">
+  <button type="submit">Mint token</button>
+</form>
+{{template "foot" .}}
+{{end}}

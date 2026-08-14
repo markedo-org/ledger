@@ -1,6 +1,8 @@
 /ledger
 *.db
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.sqlite3
 config.yaml
 .env

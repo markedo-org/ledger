@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS tokens (
   owner_id TEXT NOT NULL REFERENCES owners(id),
   ledger_id TEXT REFERENCES ledgers(id),
   role TEXT NOT NULL DEFAULT 'write',
+  email TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 
@@ -114,4 +115,26 @@ CREATE TABLE IF NOT EXISTS idempotency (
 CREATE INDEX IF NOT EXISTS idx_tasks_ledger_phase_rank ON tasks(ledger_id, phase, rank);
 CREATE INDEX IF NOT EXISTS idx_events_ledger ON events(ledger_id, id);
 CREATE INDEX IF NOT EXISTS idx_notes_task ON notes(task_id, created_at);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  actor TEXT NOT NULL DEFAULT '',
+  github_id TEXT NOT NULL DEFAULT '',
+  github_login TEXT NOT NULL DEFAULT '',
+  owner_slug TEXT NOT NULL DEFAULT '',
+  ledger_slug TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL DEFAULT '',
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS magic_links (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  token_id TEXT NOT NULL REFERENCES tokens(id),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `

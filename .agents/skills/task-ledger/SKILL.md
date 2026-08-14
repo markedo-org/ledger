@@ -1,72 +1,86 @@
 ---
 name: task-ledger
 description: >
-  Use the task-ledger HTTP API as the write path for shared work. Claim, update,
-  and close tasks through the API. Never edit a generated TASKS.md snapshot. Use
-  when creating, listing, claiming, deferring, or closing tasks, or when more
-  than one agent shares a ledger.
+  Use the shared task-ledger for multi-agent work. Claim, update, and close
+  tasks through MCP (or the HTTP API). Never edit a generated TASKS.md snapshot.
+  Use whenever creating, listing, claiming, deferring, verifying, or closing
+  tasks, when more than one agent shares a ledger, or when the user mentions
+  task-ledger, the live ledger, or T- handles.
 ---
 
 # task-ledger
 
-This skill carries **conventions**. Operations are HTTP calls.
+Conventions for agents attached to a task-ledger server. The live system is
+the write path. Prefer MCP tools. Use HTTP if MCP is not attached.
 
-## Rules
+## Configure
 
-1. The live system is the write path. Do not edit `TASKS.md` if it was generated
-   by task-ledger. That file is a snapshot.
-2. Claim a task before you work on it. Heartbeat if the work will run past the
-   lease. Request a longer `ttl_seconds` when you already know it will.
-3. Use intent-shaped operations. Do not reconstruct and PUT a whole task object.
-4. Identify yourself via the bearer token's actor. Series (`T-`) is a workstream,
-   not your name.
-5. Auth is `Authorization: Bearer <token>`. Never put the token in the URL.
-6. Send `idempotency_key` on create. Agents retry.
+Read from the environment (do not invent URLs or tokens):
 
-## This repo (dogfood)
+| Variable | Meaning | Example |
+| --- | --- | --- |
+| `LEDGER_URL` | Origin of the server | `https://ledger.example` or `http://127.0.0.1:8080` |
+| `LEDGER_TOKEN` | Bearer token (`lgr_…`) | minted once, never in git |
+| `LEDGER_OWNER` | Owner slug | `acme` |
+| `LEDGER_LEDGER` | Ledger slug | `inbox` |
 
-- Base URL: `http://127.0.0.1:8080`
-- Owner / ledger: `markedo` / `markedo-meta`
-- Token: `$LEDGER_TOKEN`
-- Actor: baked into the token (boot default `maria`)
-
-## Calls
-
-```
-POST /v1/markedo/markedo-meta/tasks
-{"title":"…","body":"…","phase":"NOW","size":"M","idempotency_key":"…"}
-
-POST /v1/markedo/markedo-meta/next
-{"prefix":"T"}
-
-POST /v1/markedo/markedo-meta/tasks/T-001/claim
-{"ttl_seconds":1800}
-
-POST /v1/markedo/markedo-meta/tasks/T-001/notes
-{"body":"…"}
-
-POST /v1/markedo/markedo-meta/tasks/T-001/phase
-{"phase":"NEXT","reason":"waiting on review"}
-
-POST /v1/markedo/markedo-meta/tasks/T-001/close
-{"evidence":"commit abc123"}
-```
-
-Live view: `http://127.0.0.1:8080/markedo/markedo-meta`
-Snapshot: `http://127.0.0.1:8080/markedo/markedo-meta.md`
-
-MCP (Streamable HTTP) is at `http://127.0.0.1:8080/mcp` with the same bearer
-token. Prefer those tools over curl once the harness has them attached. Config:
+MCP (Streamable HTTP, same token). Not stdio. Do not wrap the `ledger` binary.
 
 ```json
 {
   "mcpServers": {
     "task-ledger": {
-      "url": "http://127.0.0.1:8080/mcp",
-      "headers": { "Authorization": "Bearer lgr_dev" }
+      "url": "LEDGER_URL/mcp",
+      "headers": { "Authorization": "Bearer LEDGER_TOKEN" }
     }
   }
 }
 ```
 
-Do not wrap the `ledger` binary in a local stdio MCP server.
+Cursor does not interpolate env in `mcp.json`. Put the literal URL and token
+there. Never put the token in a query string.
+
+A token bound to one ledger is enough. Tools default owner and ledger from it.
+HTML `/login` is for humans; agents use the bearer token, not the session cookie.
+
+## Rules
+
+1. Do not edit `TASKS.md` if task-ledger generated it. That file is a snapshot.
+2. Claim before you work. Heartbeat if you will run past the lease. Pass
+   `ttl_seconds` when you already know it will be long (max 24h, default 30m).
+3. Intent-shaped operations only. No whole-object PUT.
+4. Actor is the token, not a prefix. Series `T-` is a workstream.
+5. `idempotency_key` on every create. Agents retry.
+6. Closing needs `evidence`. All checks must be ticked (`set_check`).
+7. Moving a task later needs `reason`. A fourth silent deferral is refused
+   unless you pass `force`.
+8. Prefer `next_task` over list-then-claim.
+
+## MCP tools
+
+`list_ledgers`, `create_ledger`, `create_token` (admin), `list_tasks`,
+`get_task`, `create_task`, `claim_task`, `next_task`, `add_note`, `set_check`,
+`set_phase`, `close_task`, `verify_task`, `heartbeat_task`, `release_task`.
+
+Resource `ledger://live` is a markdown snapshot. Read-only.
+
+## HTTP fallback
+
+Base: `$LEDGER_URL`. Header: `Authorization: Bearer $LEDGER_TOKEN`.
+
+```
+POST /v1/$LEDGER_OWNER/ledgers
+POST /v1/$LEDGER_OWNER/tokens
+GET  /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/next
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/claim
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/notes
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/checks
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/phase
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/close
+POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/verify
+```
+
+Live view: `$LEDGER_URL/$LEDGER_OWNER/$LEDGER_LEDGER`
+Snapshot: `$LEDGER_URL/$LEDGER_OWNER/$LEDGER_LEDGER.md`

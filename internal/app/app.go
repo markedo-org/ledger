@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/markedo-org/ledger/internal/mail"
 	"github.com/markedo-org/ledger/internal/store"
 	"github.com/markedo-org/ledger/internal/types"
 )
@@ -17,6 +19,7 @@ const (
 	MaxLease           = 24 * time.Hour
 	MaxDeferral        = 3
 	MaxSeriesPerLedger = 5
+	SessionTTL         = 7 * 24 * time.Hour
 )
 
 var (
@@ -29,20 +32,44 @@ var (
 )
 
 type App struct {
-	Store *store.Store
+	Store     *store.Store
+	operator  string
+	Mail      mail.Sender
+	PublicURL string
+	magic     *magicGate
 }
 
 func New(s *store.Store) *App { return &App{Store: s} }
 
+func (a *App) SetOperatorToken(plain string) {
+	a.operator = strings.TrimSpace(plain)
+}
+
+func (a *App) OperatorConfigured() bool { return a.operator != "" }
+
 func (a *App) Auth(ctx context.Context, token string) (types.Token, error) {
 	if token == "" {
 		return types.Token{}, ErrUnauthorized
+	}
+	if a.matchOperator(token) {
+		return types.Token{Actor: "operator", Role: types.RoleOperator}, nil
 	}
 	t, err := a.Store.LookupToken(ctx, token)
 	if err == sql.ErrNoRows {
 		return types.Token{}, ErrUnauthorized
 	}
 	return t, err
+}
+
+func (a *App) matchOperator(plain string) bool {
+	want := a.operator
+	if want == "" {
+		return false
+	}
+	if len(plain) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(plain), []byte(want)) == 1
 }
 
 func (a *App) Ledger(ctx context.Context, tok types.Token, owner, ledger string) (types.Ledger, error) {
@@ -52,6 +79,9 @@ func (a *App) Ledger(ctx context.Context, tok types.Token, owner, ledger string)
 	}
 	if err != nil {
 		return l, err
+	}
+	if tok.IsOperator() {
+		return l, nil
 	}
 	if tok.OwnerID != l.OwnerID {
 		return l, ErrForbidden
@@ -78,9 +108,16 @@ func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string,
 	if err != nil {
 		return types.Task{}, false, err
 	}
+	if err := a.requireWritable(ctx, l); err != nil {
+		return types.Task{}, false, err
+	}
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
 		return types.Task{}, false, fmt.Errorf("%w: title required", ErrInvalid)
+	}
+	key := strings.TrimSpace(in.IdempotencyKey)
+	if key == "" {
+		return types.Task{}, false, fmt.Errorf("%w: idempotency_key required", ErrInvalid)
 	}
 	prefix := strings.ToUpper(strings.TrimSpace(in.Prefix))
 	if prefix == "" {
@@ -110,7 +147,7 @@ func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string,
 		Size:           size,
 		Ref:            strings.TrimSpace(in.Ref),
 		Actor:          tok.Actor,
-		IdempotencyKey: strings.TrimSpace(in.IdempotencyKey),
+		IdempotencyKey: key,
 		Checks:         in.Checks,
 	})
 	return task, replay, err
@@ -172,7 +209,7 @@ type ClaimInput struct {
 }
 
 func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle string, in ClaimInput) (types.Task, error) {
-	t, err := a.Get(ctx, tok, owner, ledger, handle)
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
@@ -216,7 +253,7 @@ func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle 
 }
 
 func (a *App) Heartbeat(ctx context.Context, tok types.Token, owner, ledger, handle string, ttl time.Duration) (types.Task, error) {
-	t, err := a.Get(ctx, tok, owner, ledger, handle)
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
@@ -241,7 +278,7 @@ func (a *App) Release(ctx context.Context, tok types.Token, owner, ledger, handl
 	if err != nil {
 		return t, err
 	}
-	if t.ClaimedBy != "" && t.ClaimedBy != tok.Actor && tok.Role != "admin" {
+	if t.ClaimedBy != "" && t.ClaimedBy != tok.Actor && tok.Role != types.RoleAdmin && !tok.IsOperator() {
 		return t, fmt.Errorf("%w: held by %s", ErrConflict, t.ClaimedBy)
 	}
 	return a.Store.Mutate(ctx, t.ID, tok.Actor, "release", map[string]string{}, store.MutateTask{ClearClaim: true})
@@ -254,7 +291,7 @@ type PhaseInput struct {
 }
 
 func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, handle string, in PhaseInput) (types.Task, error) {
-	t, err := a.Get(ctx, tok, owner, ledger, handle)
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
@@ -282,8 +319,44 @@ func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, hand
 	})
 }
 
+func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, handle string, n int, body string, done bool) (types.Task, error) {
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
+	if err != nil {
+		return t, err
+	}
+	if t.Phase == types.PhaseDONE {
+		return t, fmt.Errorf("%w: cannot change checks on a closed task", ErrInvalid)
+	}
+	var id string
+	if n > 0 {
+		if n > len(t.Checks) {
+			return t, fmt.Errorf("%w: check %d not found", ErrNotFound, n)
+		}
+		id = t.Checks[n-1].ID
+	} else {
+		body = strings.TrimSpace(body)
+		if body == "" {
+			return t, fmt.Errorf("%w: n or body required", ErrInvalid)
+		}
+		var matches []types.Check
+		for _, c := range t.Checks {
+			if c.Body == body {
+				matches = append(matches, c)
+			}
+		}
+		if len(matches) == 0 {
+			return t, fmt.Errorf("%w: check %q not found", ErrNotFound, body)
+		}
+		if len(matches) > 1 {
+			return t, fmt.Errorf("%w: check %q is not unique, use n", ErrInvalid, body)
+		}
+		id = matches[0].ID
+	}
+	return a.Store.SetCheck(ctx, t.ID, tok.Actor, id, done)
+}
+
 func (a *App) AddNote(ctx context.Context, tok types.Token, owner, ledger, handle, body string) (types.Note, error) {
-	t, err := a.Get(ctx, tok, owner, ledger, handle)
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return types.Note{}, err
 	}
@@ -295,7 +368,7 @@ func (a *App) AddNote(ctx context.Context, tok types.Token, owner, ledger, handl
 }
 
 func (a *App) Close(ctx context.Context, tok types.Token, owner, ledger, handle, evidence string) (types.Task, error) {
-	t, err := a.Get(ctx, tok, owner, ledger, handle)
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
@@ -319,7 +392,7 @@ func (a *App) Close(ctx context.Context, tok types.Token, owner, ledger, handle,
 }
 
 func (a *App) Verify(ctx context.Context, tok types.Token, owner, ledger, handle string) (types.Task, error) {
-	t, err := a.Get(ctx, tok, owner, ledger, handle)
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
@@ -354,5 +427,193 @@ func (a *App) Next(ctx context.Context, tok types.Token, owner, ledger, prefix s
 }
 
 func (a *App) Reap(ctx context.Context) (int, error) {
-	return a.Store.Reap(ctx)
+	n, err := a.Store.Reap(ctx)
+	if err != nil {
+		return n, err
+	}
+	s, err := a.Store.ReapSessions(ctx)
+	if err != nil {
+		return n + s, err
+	}
+	m, err := a.Store.ReapMagicLinks(ctx)
+	return n + s + m, err
+}
+
+func (a *App) ListLedgersPublic(ctx context.Context, ownerSlug string) ([]LedgerInfo, error) {
+	o, err := a.Store.OwnerBySlug(ctx, ownerSlug)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return a.ledgersWithFreeze(ctx, o)
+}
+
+func (a *App) CreateSession(ctx context.Context, actor, githubID, login, ownerSlug, ledgerSlug, role string) (types.Session, string, error) {
+	if actor == "" {
+		actor = login
+	}
+	return a.Store.CreateSession(ctx, actor, githubID, login, ownerSlug, ledgerSlug, role, SessionTTL)
+}
+
+func (a *App) SessionFromAPIToken(ctx context.Context, apiToken string) (types.Session, string, error) {
+	tok, err := a.Auth(ctx, strings.TrimSpace(apiToken))
+	if err != nil {
+		return types.Session{}, "", err
+	}
+	role := ""
+	if tok.IsOperator() {
+		role = types.RoleOperator
+	}
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, role)
+}
+
+func (a *App) Session(ctx context.Context, plain string) (types.Session, error) {
+	if plain == "" {
+		return types.Session{}, ErrUnauthorized
+	}
+	s, err := a.Store.LookupSession(ctx, plain)
+	if err == sql.ErrNoRows {
+		return types.Session{}, ErrUnauthorized
+	}
+	return s, err
+}
+
+func (a *App) DeleteSession(ctx context.Context, plain string) error {
+	return a.Store.DeleteSession(ctx, plain)
+}
+
+func (a *App) requireOwner(tok types.Token, ownerSlug string) error {
+	if tok.IsOperator() {
+		return nil
+	}
+	if tok.OwnerSlug != ownerSlug {
+		return ErrForbidden
+	}
+	return nil
+}
+
+func (a *App) requireAdmin(tok types.Token) error {
+	if tok.IsOperator() || tok.Role == types.RoleAdmin {
+		return nil
+	}
+	return fmt.Errorf("%w: admin role required", ErrForbidden)
+}
+
+func (a *App) requireOperator(tok types.Token) error {
+	if !tok.IsOperator() {
+		return fmt.Errorf("%w: operator token required", ErrForbidden)
+	}
+	return nil
+}
+
+func (a *App) resolveOwner(ctx context.Context, tok types.Token, ownerSlug string) (types.Owner, error) {
+	if err := a.requireOwner(tok, ownerSlug); err != nil {
+		return types.Owner{}, err
+	}
+	if tok.IsOperator() {
+		o, err := a.Store.OwnerBySlug(ctx, ownerSlug)
+		if err == sql.ErrNoRows {
+			return types.Owner{}, ErrNotFound
+		}
+		return o, err
+	}
+	return types.Owner{ID: tok.OwnerID, Slug: tok.OwnerSlug}, nil
+}
+
+func (a *App) ListLedgers(ctx context.Context, tok types.Token, ownerSlug string) ([]types.Ledger, error) {
+	o, err := a.resolveOwner(ctx, tok, ownerSlug)
+	if err != nil {
+		return nil, err
+	}
+	return a.Store.ListLedgers(ctx, o.ID)
+}
+
+type CreateLedgerInput struct {
+	Slug  string
+	Title string
+}
+
+func (a *App) CreateLedger(ctx context.Context, tok types.Token, ownerSlug string, in CreateLedgerInput) (types.Ledger, error) {
+	if err := a.requireAdmin(tok); err != nil {
+		return types.Ledger{}, err
+	}
+	o, err := a.resolveOwner(ctx, tok, ownerSlug)
+	if err != nil {
+		return types.Ledger{}, err
+	}
+	slug := strings.ToLower(strings.TrimSpace(in.Slug))
+	if !types.ValidSlug(slug) {
+		return types.Ledger{}, fmt.Errorf("%w: ledger slug must be lowercase letters, digits, hyphens", ErrInvalid)
+	}
+	title := strings.TrimSpace(in.Title)
+	l, err := a.Store.CreateLedger(ctx, o.ID, slug, title, tok.Actor)
+	if errors.Is(err, store.ErrLedgerCap) {
+		return l, fmt.Errorf("%w: max_ledgers reached", ErrPolicy)
+	}
+	if errors.Is(err, store.ErrConflict) {
+		return l, fmt.Errorf("%w: ledger %s already exists", ErrConflict, slug)
+	}
+	return l, err
+}
+
+type CreateTokenInput struct {
+	Actor  string
+	Ledger string // empty: owner-scoped
+	Role   string
+	Email  string
+}
+
+type IssuedToken struct {
+	Token types.Token
+	Plain string
+}
+
+func (a *App) CreateToken(ctx context.Context, tok types.Token, ownerSlug string, in CreateTokenInput) (IssuedToken, error) {
+	if err := a.requireAdmin(tok); err != nil {
+		return IssuedToken{}, err
+	}
+	o, err := a.resolveOwner(ctx, tok, ownerSlug)
+	if err != nil {
+		return IssuedToken{}, err
+	}
+	actor := strings.ToLower(strings.TrimSpace(in.Actor))
+	if !types.ValidActor(actor) {
+		return IssuedToken{}, fmt.Errorf("%w: actor must be lowercase letters, digits, underscore or hyphen", ErrInvalid)
+	}
+	role := strings.ToLower(strings.TrimSpace(in.Role))
+	if role == "" {
+		role = types.RoleWrite
+	}
+	if role != types.RoleWrite && role != types.RoleAdmin {
+		return IssuedToken{}, fmt.Errorf("%w: role must be write or admin", ErrInvalid)
+	}
+	var ledgerID string
+	if strings.TrimSpace(in.Ledger) != "" {
+		l, err := a.Store.ResolveLedger(ctx, ownerSlug, strings.TrimSpace(in.Ledger))
+		if err == sql.ErrNoRows {
+			return IssuedToken{}, ErrNotFound
+		}
+		if err != nil {
+			return IssuedToken{}, err
+		}
+		if l.OwnerID != o.ID {
+			return IssuedToken{}, ErrForbidden
+		}
+		ledgerID = l.ID
+	}
+	plain, err := store.NewToken()
+	if err != nil {
+		return IssuedToken{}, err
+	}
+	email, err := NormalizeEmail(in.Email)
+	if err != nil {
+		return IssuedToken{}, err
+	}
+	issued, err := a.Store.CreateToken(ctx, o.ID, actor, ledgerID, role, email, plain)
+	if errors.Is(err, store.ErrConflict) {
+		return IssuedToken{}, fmt.Errorf("%w: email already bound to a token", ErrConflict)
+	}
+	return IssuedToken{Token: issued, Plain: plain}, nil
 }

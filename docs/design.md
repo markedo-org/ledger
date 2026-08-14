@@ -28,9 +28,9 @@ URLs:
 /:owner/:ledger.md
 ```
 
-Auth: browser session (GitHub OAuth for hosted humans; a bearer token is enough
-to dogfood). API and MCP use `Authorization: Bearer`. No API keys in query
-strings.
+Auth: browser session from a bearer token (the identity) or optional GitHub
+OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
+`Authorization: Bearer`. No API keys in query strings. No user table.
 
 ## Semantics that cannot wait
 
@@ -45,8 +45,22 @@ strings.
   without IDs.
 - Policy: evidence on close, reason on deferral, no fourth silent deferral.
   Stale verification warns and allows override.
-- SQLite in WAL, one process. `max_ledgers` on the owner (meter later). No Stripe
-  in v1.
+- SQLite in WAL, one process. `max_ledgers` on the owner is the meter.
+  Stripe is not in this binary. See [`provisioning.md`](provisioning.md).
+
+## Meter and provisioning (next slice)
+
+Ledger owns the meter. The hosted site owns money. Same binary, same port.
+Self-hosters call the same operator routes we will call from
+`www.task-ledger.com`.
+
+- Host-level operator token (not owner `admin`): create owners, create
+  ledgers, set `max_ledgers` (floor 1). Optional HTML admin page later.
+- Overflow freeze: when cap is below ledger count, newest ledgers are
+  read-only; oldest `max_ledgers` stay writable. Same-second creates follow
+  insert order. Derive, do not store a flag.
+- Stripe, webhooks, and the provisioning client come after that API exists.
+  Working hosted prices live in `provisioning.md`.
 
 ## Out of v1
 
@@ -63,6 +77,8 @@ form.
 
 ## Hosting
 
-The hosted app runs on VPS **Services** (`62.238.47.32`, `services.markedo.com`),
-not on the Markedo website box. The registered task-ledger domain already points
-there. Where the marketing site lives is open and can change.
+Markedo hosted: apex `https://task-ledger.com` is the app. Brochure and signup
+are `https://www.task-ledger.com`. `GET /` with no extra path is configurable
+(`login`, `url`, or `file`). Hosted uses `url` → the brochure. The app does
+not live under `app.`. Live view, API, and MCP stay on the apex. Self-host
+is the same binary; see `docs/deploy.md`.

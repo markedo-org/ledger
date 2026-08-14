@@ -35,6 +35,10 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if _, err := db.Exec(`INSERT OR IGNORE INTO meta(key, value) VALUES ('schema', '1')`); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -44,6 +48,29 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+func migrate(db *sql.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE sessions ADD COLUMN actor TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN owner_slug TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN ledger_slug TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE tokens ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
+		`CREATE TABLE IF NOT EXISTS magic_links (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  token_id TEXT NOT NULL REFERENCES tokens(id),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email) WHERE email != ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+			return fmt.Errorf("migrate: %s: %w", stmt, err)
+		}
+	}
+	return nil
 }
 
 func now() time.Time { return time.Now().UTC().Truncate(time.Second) }
@@ -518,6 +545,48 @@ func (s *Store) AddNote(ctx context.Context, taskID, actor, body string) (types.
 		return err
 	})
 	return note, err
+}
+
+func (s *Store) SetCheck(ctx context.Context, taskID, actor, checkID string, done bool) (types.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var task types.Task
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		t, err := getTaskTx(ctx, tx, taskID)
+		if err != nil {
+			return err
+		}
+		var found bool
+		var body string
+		var n int
+		for _, c := range t.Checks {
+			if c.ID == checkID {
+				found = true
+				body = c.Body
+				n = c.Rank + 1
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("check not found")
+		}
+		doneInt := 0
+		if done {
+			doneInt = 1
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE checks SET done = ? WHERE id = ?`, doneInt, checkID); err != nil {
+			return err
+		}
+		payload, _ := json.Marshal(map[string]any{"n": n, "body": body, "done": done})
+		if _, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
+			t.LedgerID, t.ID, actor, "check", string(payload), fmtTime(now())); err != nil {
+			return err
+		}
+		t2, err := getTaskTx(ctx, tx, taskID)
+		task = t2
+		return err
+	})
+	return task, err
 }
 
 func (s *Store) Reap(ctx context.Context) (int, error) {

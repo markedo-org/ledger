@@ -1,31 +1,37 @@
 {{define "task"}}
 {{template "head" .}}
 <header class="mast">
-  <h1 class="brand"><a href="/{{.Owner}}/{{.Ledger}}">{{.Owner}}/{{.Ledger}}</a></h1>
-  <div class="meta">{{.Task.Handle}}</div>
+  <h1 class="brand">{{template "mark"}}<a href="/{{.Owner}}/{{.Ledger}}">{{.Owner}}/{{.Ledger}}</a></h1>
+  <div class="meta">{{.Task.Handle}} {{template "appearance"}}</div>
   <p>{{.Task.Phase}}{{if .Task.Size}} · size {{.Task.Size}}{{end}}</p>
 </header>
+{{if .Frozen}}
+<p class="notice freeze">This ledger is read-only. It is newer than this owner's max_ledgers. Writes resume when the cap rises.</p>
+{{end}}
 <article class="task">
-  <a class="handle" href="/{{.Owner}}/{{.Ledger}}/{{.Task.Handle}}">{{.Task.Handle}}</a>
   <h1>{{.Task.Title}}</h1>
   {{if .Task.ClaimedBy}}
   <p class="row-meta"><span class="pill">held by {{.Task.ClaimedBy}} until {{.ClaimUntil}}</span></p>
   {{end}}
   {{if .Task.Body}}<div class="prose">{{.Task.Body}}</div>{{end}}
   {{if .Task.Checks}}
-  <ul>
+  <h2 class="phase">Checks</h2>
+  <ul class="checks">
     {{range .Task.Checks}}
-    <li>{{if .Done}}[x]{{else}}[ ]{{end}} {{.Body}}</li>
+    <li{{if .Done}} class="done"{{end}}>{{.Body}}</li>
     {{end}}
   </ul>
   {{end}}
-  {{if .Task.Evidence}}<p class="row-meta">evidence: {{.Task.Evidence}}</p>{{end}}
+  {{if .Task.Evidence}}
+  <h2 class="phase">Evidence</h2>
+  <p class="prose">{{.Task.Evidence}}</p>
+  {{end}}
   {{if .Task.Notes}}
   <h2 class="phase">Notes</h2>
   <ol class="notes">
     {{range .Task.Notes}}
     <li>
-      <div class="who">{{.Actor}} · {{.CreatedAt.UTC.Format "2006-01-02 15:04"}}</div>
+      <div class="who">{{.Actor}} · {{.CreatedAt.UTC.Format "2006-01-02 15:04"}} UTC</div>
       <div class="prose">{{.Body}}</div>
     </li>
     {{end}}

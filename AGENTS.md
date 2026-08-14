@@ -18,7 +18,9 @@ This file is the router. Read linked files when the task needs them.
 | --- | --- |
 | Settled design | `docs/design.md` |
 | MCP | `docs/mcp.md` |
-| Agent skill (conventions) | `.agents/skills/task-ledger/` |
+| GitHub OAuth (HTML) | `docs/auth.md` |
+| Deploy | `docs/deploy.md`, `scripts/deploy.sh` |
+| Agent skill (conventions) | `.agents/skills/task-ledger/` (`npx skills add markedo-org/ledger -s task-ledger`) |
 | Server entry | `cmd/ledger/` |
 
 ## Rules that always apply

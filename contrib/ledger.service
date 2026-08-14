@@ -1,0 +1,17 @@
+[Unit]
+Description=task-ledger
+After=network.target
+
+[Service]
+Type=simple
+User=ledger
+Group=ledger
+WorkingDirectory=/opt/ledger
+EnvironmentFile=/opt/ledger/ledger.env
+# 8080 is taken on VPS Services (domain-retailer / Trackveil).
+ExecStart=/opt/ledger/ledger -listen 127.0.0.1:8787 -db /opt/ledger/ledger.sqlite
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,26 @@
+{{define "owner"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand">{{template "mark"}}{{.Owner}}</h1>
+  <div class="meta">task-ledger · owner {{template "appearance"}}</div>
+  <p>Ledgers under this owner. The write path is the API.</p>
+</header>
+{{if .Ledgers}}
+<ol class="register">
+  {{range .Ledgers}}
+  <li class="{{if .Frozen}}frozen{{end}}">
+    <a class="row" href="/{{$.Owner}}/{{.Slug}}">
+      <span class="handle">{{.Slug}}</span>
+      <span class="row-main">
+        <span class="title">{{if .Title}}{{.Title}}{{else}}{{.Slug}}{{end}}</span>
+        {{if .Frozen}}<span class="row-meta">read-only</span>{{end}}
+      </span>
+    </a>
+  </li>
+  {{end}}
+</ol>
+{{else}}
+<p class="empty">None.</p>
+{{end}}
+{{template "foot" .}}
+{{end}}

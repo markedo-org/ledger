@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -21,13 +20,20 @@ func Handler(a *app.App) http.Handler {
 	inner := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		tok, _ := r.Context().Value(ctxKey{}).(types.Token)
 		return newServer(a, tok)
-	}, &mcp.StreamableHTTPOptions{Stateless: true})
+	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, err := a.Auth(r.Context(), bearer(r))
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="task-ledger"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
+		}
+		// The SDK requires Accept to list both application/json and
+		// text/event-stream. Some clients (Cursor included) send only JSON on
+		// the Streamable HTTP POST. We are JSON-response, not legacy SSE.
+		if !strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			r = r.Clone(r.Context())
+			r.Header.Set("Accept", "application/json, text/event-stream")
 		}
 		inner.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, tok)))
 	})
@@ -43,8 +49,28 @@ func bearer(r *http.Request) string {
 }
 
 func newServer(a *app.App, tok types.Token) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "task-ledger", Version: "0.2.0"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "task-ledger", Version: "0.4.0"}, nil)
 	h := &host{app: a, tok: tok}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "list_ledgers",
+		Description: "List ledgers for an owner. Defaults to the token's owner.",
+	}, h.listLedgers)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "create_ledger",
+		Description: "Create a ledger under an owner. Admin only. Enforces max_ledgers. Creates series T. Does not mint a token.",
+	}, h.createLedger)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "create_token",
+		Description: "Mint a bearer token. Admin only. Omit ledger for an owner-scoped token; set ledger to bind it to one project. Optional email binds the token for magic-link sign-in. The plaintext token is returned once.",
+	}, h.createToken)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "create_owner",
+		Description: "Create an owner. Operator token only. Optional first ledger and actor mints an admin token (plaintext once). Default max_ledgers is 1.",
+	}, h.createOwner)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "set_max_ledgers",
+		Description: "Set max_ledgers on an owner. Operator token only. 0 means unlimited. Extra newest ledgers become read-only when the cap is below the current count.",
+	}, h.setMaxLedgers)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_tasks",
 		Description: "List tasks in a ledger, grouped by phase. Defaults to the ledger bound to the bearer token. Use before picking work.",
@@ -70,6 +96,10 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Description: "Append a note to a task. Notes are append-only; two agents can both write without clobbering.",
 	}, h.addNote)
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "set_check",
+		Description: "Tick or untick a sub-checkbox. Identify by n (1-based, from get_task) or by exact body text. All checks must be ticked before close_task.",
+	}, h.setCheck)
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_phase",
 		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. Closing is close_task, not this.",
 	}, h.setPhase)
@@ -77,6 +107,10 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Name:        "close_task",
 		Description: "Close a task. Evidence is required (commit, query result, or observed behaviour). All checks must be ticked.",
 	}, h.closeTask)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "verify_task",
+		Description: "Mark a task as verified now. Use after reviewing a closed or standing task. Does not close it.",
+	}, h.verify)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "heartbeat_task",
 		Description: "Extend the current actor's lease on a claimed task.",
@@ -110,6 +144,135 @@ func (h *host) scope(owner, ledger string) (string, string, error) {
 		return "", "", fmtErr("owner and ledger are required (or use a token bound to one ledger)")
 	}
 	return owner, ledger, nil
+}
+
+func (h *host) ownerScope(owner string) (string, error) {
+	if owner == "" {
+		owner = h.tok.OwnerSlug
+	}
+	if owner == "" {
+		return "", fmtErr("owner is required")
+	}
+	return owner, nil
+}
+
+type listLedgersIn struct {
+	Owner string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+}
+
+type listLedgersOut struct {
+	Owner   string        `json:"owner"`
+	Ledgers []ledgerBrief `json:"ledgers"`
+}
+
+type ledgerBrief struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+
+func (h *host) listLedgers(ctx context.Context, _ *mcp.CallToolRequest, in listLedgersIn) (*mcp.CallToolResult, listLedgersOut, error) {
+	owner, err := h.ownerScope(in.Owner)
+	if err != nil {
+		return nil, listLedgersOut{}, err
+	}
+	ledgers, err := h.app.ListLedgers(ctx, h.tok, owner)
+	if err != nil {
+		return nil, listLedgersOut{}, err
+	}
+	out := listLedgersOut{Owner: owner, Ledgers: []ledgerBrief{}}
+	for _, l := range ledgers {
+		out.Ledgers = append(out.Ledgers, ledgerBrief{Slug: l.Slug, Title: l.Title})
+	}
+	return nil, out, nil
+}
+
+type createLedgerIn struct {
+	Owner string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Slug  string `json:"slug" jsonschema:"Ledger slug, for example iq or dispatch"`
+	Title string `json:"title,omitempty" jsonschema:"Display title. Defaults to the slug."`
+}
+
+func (h *host) createLedger(ctx context.Context, _ *mcp.CallToolRequest, in createLedgerIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, err := h.ownerScope(in.Owner)
+	if err != nil {
+		return nil, nil, err
+	}
+	l, err := h.app.CreateLedger(ctx, h.tok, owner, app.CreateLedgerInput{Slug: in.Slug, Title: in.Title})
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, map[string]any{"owner": l.OwnerSlug, "slug": l.Slug, "title": l.Title}, nil
+}
+
+type createTokenIn struct {
+	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Actor  string `json:"actor" jsonschema:"Actor name baked into the token, for example batty"`
+	Ledger string `json:"ledger,omitempty" jsonschema:"Bind to this ledger. Omit for an owner-scoped token."`
+	Role   string `json:"role,omitempty" jsonschema:"write or admin. Default write."`
+	Email  string `json:"email,omitempty" jsonschema:"Optional email for magic-link sign-in. One token per address."`
+}
+
+func (h *host) createToken(ctx context.Context, _ *mcp.CallToolRequest, in createTokenIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, err := h.ownerScope(in.Owner)
+	if err != nil {
+		return nil, nil, err
+	}
+	issued, err := h.app.CreateToken(ctx, h.tok, owner, app.CreateTokenInput{Actor: in.Actor, Ledger: in.Ledger, Role: in.Role, Email: in.Email})
+	if err != nil {
+		return nil, nil, err
+	}
+	out := map[string]any{
+		"actor": issued.Token.Actor,
+		"role":  issued.Token.Role,
+		"token": issued.Plain,
+	}
+	if issued.Token.LedgerSlug != "" {
+		out["ledger"] = issued.Token.LedgerSlug
+	}
+	if issued.Token.Email != "" {
+		out["email"] = issued.Token.Email
+	}
+	return nil, out, nil
+}
+
+type createOwnerIn struct {
+	Slug       string `json:"slug" jsonschema:"Owner slug, for example acme"`
+	MaxLedgers int    `json:"max_ledgers,omitempty" jsonschema:"Cap. 0 or omit means 1 on create."`
+	Ledger     string `json:"ledger,omitempty" jsonschema:"Optional first ledger slug"`
+	Title      string `json:"title,omitempty" jsonschema:"Optional first ledger title"`
+	Actor      string `json:"actor,omitempty" jsonschema:"If set with ledger, mint an admin token for this actor"`
+	Email      string `json:"email,omitempty" jsonschema:"Optional email bound to the minted token for magic-link sign-in"`
+}
+
+func (h *host) createOwner(ctx context.Context, _ *mcp.CallToolRequest, in createOwnerIn) (*mcp.CallToolResult, map[string]any, error) {
+	created, err := h.app.CreateOwner(ctx, h.tok, app.CreateOwnerInput{
+		Slug: in.Slug, MaxLedgers: in.MaxLedgers, Ledger: in.Ledger, Title: in.Title, Actor: in.Actor, Email: in.Email,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	out := map[string]any{"slug": created.Owner.Slug, "max_ledgers": created.Owner.MaxLedgers}
+	if created.Ledger != nil {
+		out["ledger"] = created.Ledger.Slug
+	}
+	if created.Token != nil {
+		out["actor"] = created.Token.Token.Actor
+		out["token"] = created.Token.Plain
+	}
+	return nil, out, nil
+}
+
+type setMaxIn struct {
+	Owner      string `json:"owner" jsonschema:"Owner slug"`
+	MaxLedgers int    `json:"max_ledgers" jsonschema:"New cap. 0 means unlimited."`
+}
+
+func (h *host) setMaxLedgers(ctx context.Context, _ *mcp.CallToolRequest, in setMaxIn) (*mcp.CallToolResult, map[string]any, error) {
+	o, err := h.app.SetMaxLedgers(ctx, h.tok, in.Owner, in.MaxLedgers)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, map[string]any{"slug": o.Slug, "max_ledgers": o.MaxLedgers}, nil
 }
 
 func fmtErr(msg string) error { return &toolError{msg} }
@@ -160,7 +323,7 @@ func (h *host) listTasks(ctx context.Context, _ *mcp.CallToolRequest, in listIn)
 	if err != nil {
 		return nil, listOut{}, err
 	}
-	out := listOut{Owner: l.OwnerSlug, Ledger: l.Slug}
+	out := listOut{Owner: l.OwnerSlug, Ledger: l.Slug, Tasks: []taskBrief{}}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, brief(t))
 	}
@@ -284,12 +447,34 @@ func (h *host) addNote(ctx context.Context, _ *mcp.CallToolRequest, in noteIn) (
 	return nil, map[string]any{"actor": n.Actor, "body": n.Body, "at": n.CreatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
+type checkIn struct {
+	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger."`
+	Handle string `json:"handle" jsonschema:"Task handle, for example T-001"`
+	N      int    `json:"n,omitempty" jsonschema:"1-based check index from get_task. Prefer this when body text is not unique."`
+	Body   string `json:"body,omitempty" jsonschema:"Exact check text. Used when n is omitted."`
+	Done   bool   `json:"done" jsonschema:"true to tick, false to untick"`
+}
+
+func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, ledger, err := h.scope(in.Owner, in.Ledger)
+	if err != nil {
+		return nil, nil, err
+	}
+	t, err := h.app.SetCheck(ctx, h.tok, owner, ledger, in.Handle, in.N, in.Body, in.Done)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, taskMap(t), nil
+}
+
 type phaseIn struct {
 	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
 	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger."`
 	Handle string `json:"handle" jsonschema:"Task handle, for example T-001"`
 	Phase  string `json:"phase" jsonschema:"NOW, NEXT, LATER, GATED, or PARKED"`
 	Reason string `json:"reason,omitempty" jsonschema:"Required when moving to a later phase"`
+	Force  bool   `json:"force,omitempty" jsonschema:"Override the fourth-deferral policy block."`
 }
 
 func (h *host) setPhase(ctx context.Context, _ *mcp.CallToolRequest, in phaseIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -297,7 +482,7 @@ func (h *host) setPhase(ctx context.Context, _ *mcp.CallToolRequest, in phaseIn)
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.SetPhase(ctx, h.tok, owner, ledger, in.Handle, app.PhaseInput{Phase: in.Phase, Reason: in.Reason})
+	t, err := h.app.SetPhase(ctx, h.tok, owner, ledger, in.Handle, app.PhaseInput{Phase: in.Phase, Reason: in.Reason, Force: in.Force})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -317,6 +502,18 @@ func (h *host) closeTask(ctx context.Context, _ *mcp.CallToolRequest, in closeIn
 		return nil, nil, err
 	}
 	t, err := h.app.Close(ctx, h.tok, owner, ledger, in.Handle, in.Evidence)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, taskMap(t), nil
+}
+
+func (h *host) verify(ctx context.Context, _ *mcp.CallToolRequest, in handleIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, ledger, err := h.scope(in.Owner, in.Ledger)
+	if err != nil {
+		return nil, nil, err
+	}
+	t, err := h.app.Verify(ctx, h.tok, owner, ledger, in.Handle)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,7 +573,19 @@ func (h *host) readLive(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp
 }
 
 func taskMap(t types.Task) map[string]any {
-	b, _ := json.Marshal(map[string]any{
+	checks := make([]map[string]any, 0, len(t.Checks))
+	for i, c := range t.Checks {
+		checks = append(checks, map[string]any{"n": i + 1, "body": c.Body, "done": c.Done})
+	}
+	notes := make([]map[string]any, 0, len(t.Notes))
+	for _, n := range t.Notes {
+		notes = append(notes, map[string]any{
+			"actor": n.Actor,
+			"body":  n.Body,
+			"at":    n.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	m := map[string]any{
 		"handle":     t.Handle,
 		"title":      t.Title,
 		"body":       t.Body,
@@ -386,8 +595,11 @@ func taskMap(t types.Task) map[string]any {
 		"claimed_by": t.ClaimedBy,
 		"evidence":   t.Evidence,
 		"ref":        t.Ref,
-	})
-	var m map[string]any
-	_ = json.Unmarshal(b, &m)
+		"checks":     checks,
+		"notes":      notes,
+	}
+	if t.VerifiedAt != nil {
+		m["verified_at"] = t.VerifiedAt.UTC().Format(time.RFC3339)
+	}
 	return m
 }

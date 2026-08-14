@@ -1,0 +1,25 @@
+{{define "owners"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand">{{template "mark"}}task-ledger</h1>
+  <div class="meta">owners {{template "appearance"}}</div>
+  <p>Owners on this ledger. Open one to see its projects.</p>
+</header>
+{{if .Owners}}
+<ol class="register">
+  {{range .Owners}}
+  <li>
+    <a class="row" href="/{{.Slug}}">
+      <span class="handle">{{.Slug}}</span>
+      <span class="row-main">
+        <span class="title">{{.Slug}}</span>
+      </span>
+    </a>
+  </li>
+  {{end}}
+</ol>
+{{else}}
+<p class="empty">None.</p>
+{{end}}
+{{template "foot" .}}
+{{end}}

@@ -5,13 +5,21 @@ COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE := $(shell date -u +%Y-%m-%d)
 LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
-.PHONY: build run test lint clean
+.PHONY: build linux-amd64 run test lint clean deploy
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/ledger
 
+linux-amd64:
+	mkdir -p dist
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/ledger-linux-amd64 ./cmd/ledger
+
 run: build
-	./$(BINARY) -listen 127.0.0.1:8080 -db ledger.sqlite
+	set -a; \
+	if [ -f ../.env ]; then . ../.env; fi; \
+	if [ -f .env ]; then . .env; fi; \
+	set +a; \
+	LEDGER_BOOT_TOKEN=$${LEDGER_BOOT_TOKEN:-lgr_dev} ./$(BINARY) -listen 127.0.0.1:8080 -db ledger.sqlite
 
 test:
 	go test ./...
@@ -19,5 +27,8 @@ test:
 lint:
 	go vet ./...
 
+deploy:
+	./scripts/deploy.sh
+
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) dist/ledger-linux-amd64
