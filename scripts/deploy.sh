@@ -298,6 +298,7 @@ if [[ ! -x "$REMOTE_DIR/ledger" && ! -f "$REMOTE_DIR/ledger.env" ]]; then
 fi
 sudo install -o ledger -g ledger -m 0755 "$HOME/ledger-bin" "$REMOTE_DIR/ledger"
 rm -f "$HOME/ledger-bin"
+sudo systemctl reset-failed "$UNIT_NAME"
 sudo systemctl restart "$UNIT_NAME"
 sleep 1
 sudo systemctl --no-pager --full status "$UNIT_NAME"

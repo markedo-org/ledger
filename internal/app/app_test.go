@@ -33,6 +33,25 @@ func boot(t *testing.T) (*app.App, types.Token) {
 	return a, auth
 }
 
+func TestBootstrapIgnoresDefaultOwnerOnExistingDB(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	again, err := s.Bootstrap(context.Background(), "acme", "inbox", "ada", tok)
+	if err != nil || again.Created {
+		t.Fatalf("existing db must not require default owner: %+v %v", again, err)
+	}
+}
+
 func TestCreateClaimClose(t *testing.T) {
 	a, tok := boot(t)
 	ctx := context.Background()
@@ -45,6 +64,9 @@ func TestCreateClaimClose(t *testing.T) {
 	}
 	if task.Handle != "T-001" {
 		t.Fatalf("handle %s", task.Handle)
+	}
+	if task.VerifiedAt != nil {
+		t.Fatal("create must not stamp verified_at")
 	}
 	again, replay, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
 		Title:          "First",
@@ -188,5 +210,42 @@ func TestProvisionLedgersAndTokens(t *testing.T) {
 	ledgers, err := a.ListLedgers(ctx, wide, "markedo")
 	if err != nil || len(ledgers) != 2 {
 		t.Fatalf("list %d %v", len(ledgers), err)
+	}
+}
+
+func TestCreateLedgerMintsProjectTokenForOwnerAdmin(t *testing.T) {
+	a, tok := boot(t)
+	a.PublicURL = "https://task-ledger.example"
+	ctx := context.Background()
+	if err := a.Store.SetMaxLedgers(ctx, tok.OwnerID, 2); err != nil {
+		t.Fatal(err)
+	}
+	l, err := a.CreateLedger(ctx, tok, "markedo", app.CreateLedgerInput{Slug: "jobs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := app.ProjectActor(tok, ""); got != tok.Actor {
+		t.Fatalf("project actor %q", got)
+	}
+	issued, err := a.MintProjectWrite(ctx, tok, "markedo", l.Slug, app.ProjectActor(tok, ""))
+	if err != nil || issued == nil || issued.Token.LedgerSlug != "jobs" || issued.Token.Role != types.RoleWrite {
+		t.Fatalf("mint %+v %v", issued, err)
+	}
+	view := a.LedgerCreatedView(l, issued)
+	if view["token"] != issued.Plain {
+		t.Fatalf("view token %v", view["token"])
+	}
+	mcp, _ := view["mcp"].(map[string]any)
+	servers, _ := mcp["mcpServers"].(map[string]any)
+	proj, _ := servers["task-ledger-jobs"].(map[string]any)
+	if proj["url"] != "https://task-ledger.example/mcp" {
+		t.Fatalf("mcp url %v", proj["url"])
+	}
+	op := types.Token{Actor: "operator", Role: types.RoleOperator}
+	if app.ProjectActor(op, "") != "" {
+		t.Fatal("operator must not default an actor")
+	}
+	if issued, err := a.MintProjectWrite(ctx, tok, "markedo", l.Slug, ""); err != nil || issued != nil {
+		t.Fatalf("empty actor %v %v", issued, err)
 	}
 }

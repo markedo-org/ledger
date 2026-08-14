@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.1
+
+Owner-scoped tokens default MCP tools to the owner's only ledger. Create no
+longer stamps `verified_at`. Skill is MCP-first and does not name a host;
+example tokens removed. Signup and create-ledger copy tell the admin-versus
+project token split. Creating a ledger as owner admin mints a bound write
+token and returns a project MCP config. Restarting an already-initialised database no longer
+requires the default boot owner (`acme`) to exist. Deploy resets a
+crash-looped systemd unit before restart.
+
 ## 0.13.0
 
 README and deploy docs are written for a public self-host first. Markedo

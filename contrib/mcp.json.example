@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "task-ledger-admin": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer <owner-admin-token>"
+      }
+    },
+    "task-ledger-inbox": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer <ledger-write-token>"
+      }
+    }
+  }
+}

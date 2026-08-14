@@ -207,22 +207,26 @@ func (s *Server) createLedger(c *gin.Context) {
 	var in struct {
 		Slug  string `json:"slug"`
 		Title string `json:"title"`
+		Actor string `json:"actor"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
 		return
 	}
-	l, err := s.App.CreateLedger(c.Request.Context(), tokenFrom(c), c.Param("owner"), app.CreateLedgerInput(in))
+	tok := tokenFrom(c)
+	l, err := s.App.CreateLedger(c.Request.Context(), tok, c.Param("owner"), app.CreateLedgerInput{Slug: in.Slug, Title: in.Title})
 	if err != nil {
 		s.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{
-		"owner":      l.OwnerSlug,
-		"slug":       l.Slug,
-		"title":      l.Title,
-		"created_at": l.CreatedAt.UTC().Format(time.RFC3339),
-	})
+	issued, err := s.App.MintProjectWrite(c.Request.Context(), tok, c.Param("owner"), l.Slug, app.ProjectActor(tok, in.Actor))
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	body := s.App.LedgerCreatedView(l, issued)
+	body["created_at"] = l.CreatedAt.UTC().Format(time.RFC3339)
+	c.JSON(http.StatusCreated, body)
 }
 
 func (s *Server) createToken(c *gin.Context) {
@@ -250,6 +254,11 @@ func (s *Server) createToken(c *gin.Context) {
 		"role":   issued.Token.Role,
 		"ledger": ledger,
 		"token":  issued.Plain,
+	}
+	if issued.Token.LedgerSlug != "" {
+		body["note"] = "Ledger-bound. Name this MCP server for the project."
+	} else {
+		body["note"] = "Owner-scoped. Name this MCP server for admin."
 	}
 	if issued.Token.Email != "" {
 		body["email"] = issued.Token.Email

@@ -558,6 +558,79 @@ func (a *App) CreateLedger(ctx context.Context, tok types.Token, ownerSlug strin
 	return l, err
 }
 
+// ProjectActor is who to mint a ledger-bound write token for after create_ledger.
+// An explicit actor wins. Owner admin defaults to the creating token's actor.
+// Operator does not default: they must pass an actor or we only suggest a mint.
+func ProjectActor(tok types.Token, requested string) string {
+	if a := strings.ToLower(strings.TrimSpace(requested)); a != "" {
+		return a
+	}
+	if tok.IsOperator() {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(tok.Actor))
+}
+
+func (a *App) MintProjectWrite(ctx context.Context, tok types.Token, ownerSlug, ledgerSlug, actor string) (*IssuedToken, error) {
+	if strings.TrimSpace(actor) == "" {
+		return nil, nil
+	}
+	issued, err := a.CreateToken(ctx, tok, ownerSlug, CreateTokenInput{
+		Actor:  actor,
+		Ledger: ledgerSlug,
+		Role:   types.RoleWrite,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &issued, nil
+}
+
+func (a *App) AgentMCPConfig(serverName, tokenPlain string) map[string]any {
+	origin := strings.TrimRight(strings.TrimSpace(a.PublicURL), "/")
+	url := "<your-origin>/mcp"
+	if origin != "" {
+		url = origin + "/mcp"
+	}
+	if strings.TrimSpace(tokenPlain) == "" {
+		tokenPlain = "<ledger-write-token>"
+	}
+	if strings.TrimSpace(serverName) == "" {
+		serverName = "task-ledger"
+	}
+	return map[string]any{
+		"mcpServers": map[string]any{
+			serverName: map[string]any{
+				"url": url,
+				"headers": map[string]any{
+					"Authorization": "Bearer " + tokenPlain,
+				},
+			},
+		},
+	}
+}
+
+func (a *App) LedgerCreatedView(l types.Ledger, issued *IssuedToken) map[string]any {
+	server := "task-ledger-" + l.Slug
+	plain := ""
+	out := map[string]any{
+		"owner": l.OwnerSlug,
+		"slug":  l.Slug,
+		"title": l.Title,
+	}
+	if issued != nil {
+		plain = issued.Plain
+		out["token"] = issued.Plain
+		out["actor"] = issued.Token.Actor
+		out["role"] = issued.Token.Role
+		out["note"] = "Ledger-bound write token, shown once. Put it in the MCP server named for this project. Keep the owner admin token in its own server."
+	} else {
+		out["note"] = "No token minted. create_token with ledger=" + l.Slug + " and role write, then use the mcp object."
+	}
+	out["mcp"] = a.AgentMCPConfig(server, plain)
+	return out
+}
+
 type CreateTokenInput struct {
 	Actor  string
 	Ledger string // empty: owner-scoped

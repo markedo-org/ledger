@@ -113,14 +113,6 @@ func (s *Store) Bootstrap(ctx context.Context, ownerSlug, ledgerSlug, actor, tok
 			return err
 		}
 		if n > 0 {
-			var o types.Owner
-			var created string
-			if err := tx.QueryRowContext(ctx, `SELECT id, slug, max_ledgers, created_at FROM owners WHERE slug = ?`, ownerSlug).
-				Scan(&o.ID, &o.Slug, &o.MaxLedgers, &created); err != nil {
-				return fmt.Errorf("already booted, owner %s not found: %w", ownerSlug, err)
-			}
-			o.CreatedAt = parseTime(created)
-			out.Owner = o
 			out.Created = false
 			return nil
 		}
@@ -280,7 +272,7 @@ func (s *Store) CreateTask(ctx context.Context, p CreateTaskParams) (types.Task,
 			verified_at, since, ref, created_at, updated_at
 		) VALUES (?,?,?,?,?,?,?,?,?,?,1,0,?,?,?,?,?)`,
 			id, p.LedgerID, ser.ID, n, handle, p.Title, p.Body, string(p.Phase), string(p.Size), maxRank+10,
-			fmtTime(t), fmtTime(t), p.Ref, fmtTime(t), fmtTime(t)); err != nil {
+			nil, fmtTime(t), p.Ref, fmtTime(t), fmtTime(t)); err != nil {
 			return err
 		}
 		for i, c := range p.Checks {

@@ -2,85 +2,82 @@
 name: task-ledger
 description: >
   Use the shared task-ledger for multi-agent work. Claim, update, and close
-  tasks through MCP (or the HTTP API). Never edit a generated TASKS.md snapshot.
-  Use whenever creating, listing, claiming, deferring, verifying, or closing
-  tasks, when more than one agent shares a ledger, or when the user mentions
-  task-ledger, the live ledger, or T- handles.
+  tasks through MCP. Never edit a generated markdown snapshot. Use whenever
+  creating, listing, claiming, deferring, verifying, or closing tasks, when
+  more than one agent shares a ledger, or when the user mentions task-ledger,
+  the live ledger, or T- handles.
 ---
 
 # task-ledger
 
-Conventions for agents attached to a task-ledger server. The live system is
-the write path. Prefer MCP tools. Use HTTP if MCP is not attached.
+The live MCP server is the write path. Use the task-ledger tools already
+attached to this session. Do not pick a URL. Do not wrap the `ledger` binary
+as stdio MCP. Do not call the HTTP API unless the human gave you a base URL
+and said MCP is down.
 
-## Configure
+The harness config (Cursor `.cursor/mcp.json`, Claude Code `.mcp.json`) is
+where the origin and bearer token live. This skill does not name a host.
 
-Read from the environment (do not invent URLs or tokens):
+## If the tools are missing
 
-| Variable | Meaning | Example |
-| --- | --- | --- |
-| `LEDGER_URL` | Origin of the server | `https://ledger.example` or `http://127.0.0.1:8080` |
-| `LEDGER_TOKEN` | Bearer token (`lgr_…`) | minted once, never in git |
-| `LEDGER_OWNER` | Owner slug | `acme` |
-| `LEDGER_LEDGER` | Ledger slug | `inbox` |
+Stop. Ask the human to attach the Streamable HTTP server. Do not guess
+`task-ledger.com` or localhost. Do not invent a token. The README and the
+hosted signup page show the JSON shape.
 
-MCP (Streamable HTTP, same token). Not stdio. Do not wrap the `ledger` binary.
+## Which token, which MCP config
 
-```json
-{
-  "mcpServers": {
-    "task-ledger": {
-      "url": "LEDGER_URL/mcp",
-      "headers": { "Authorization": "Bearer LEDGER_TOKEN" }
-    }
-  }
-}
-```
+Signup issues an **owner admin** token. It is not bound to the first ledger.
+It can create ledgers and mint tokens. If that owner has exactly one ledger,
+tools default to it (this is the usual signup token). If the owner has
+several, pass `ledger` or mint a token bound to one project.
 
-Cursor does not interpolate env in `mcp.json`. Put the literal URL and token
-there. Never put the token in a query string.
+Two setups:
 
-A token bound to one ledger is enough. Tools default owner and ledger from it.
-HTML `/login` is for humans; agents use the bearer token, not the session cookie.
+1. An agent that creates ledgers or mints tokens. Give it the owner admin
+   token in an MCP server named for admin (`task-ledger-admin`). If that
+   same agent also works a project, add a second server named for that
+   ledger, with a **ledger-bound write** token. Do not use the admin token
+   as the project server.
+2. An agent that only works one project. Give it only a ledger-bound write
+   token, in a server named for that project. Do not give it the owner
+   admin token.
+
+`list_tasks` is a thin index (handle, title, phase, size, claimant).
+`get_task` before you act.
+
+HTML `/login` is for humans. Agents use the bearer token, not the session
+cookie.
+
+## TASKS.md in a git repo
+
+If a repo still has a hand-written `TASKS.md`, that is not a ledger snapshot.
+Do not treat it as the write path once this server is in use. Do not edit a
+file the server generated (`/{owner}/{ledger}.md`). Until the humans migrate,
+ask which write path they mean.
 
 ## Rules
 
-1. Do not edit `TASKS.md` if task-ledger generated it. That file is a snapshot.
-2. Claim before you work. Heartbeat if you will run past the lease. Pass
+1. Claim before you work. Heartbeat if you will run past the lease. Pass
    `ttl_seconds` when you already know it will be long (max 24h, default 30m).
-3. Intent-shaped operations only. No whole-object PUT.
-4. Actor is the token, not a prefix. Series `T-` is a workstream.
-5. `idempotency_key` on every create. Agents retry.
-6. Closing needs `evidence`. All checks must be ticked (`set_check`).
-7. Moving a task later needs `reason`. A fourth silent deferral is refused
+2. Intent-shaped operations only. No whole-object PUT.
+3. Actor is the token, not a prefix. Series `T-` is a workstream.
+4. `idempotency_key` on every create. Agents retry.
+5. Closing needs `evidence`. All checks must be ticked (`set_check`).
+6. Moving a task later needs `reason`. A fourth silent deferral is refused
    unless you pass `force`.
-8. Prefer `next_task` over list-then-claim.
+7. Prefer `next_task` over list-then-claim.
+8. `list_tasks` is a thin index. `get_task` before you act.
+9. `verified_at` is set when someone verifies, not at create.
 
-## MCP tools
+## Tools
 
-`list_ledgers`, `create_ledger`, `create_token` (admin), `list_tasks`,
-`get_task`, `create_task`, `claim_task`, `next_task`, `add_note`, `set_check`,
-`set_phase`, `close_task`, `verify_task`, `heartbeat_task`, `release_task`.
+`list_ledgers`, `create_ledger`, `create_token` (admin), `create_owner` and
+`set_max_ledgers` (operator), `list_tasks`, `get_task`, `create_task`,
+`claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
+`close_task`, `verify_task`, `heartbeat_task`, `release_task`.
+
+`create_ledger` as owner admin mints a ledger-bound write token (once) and
+returns an `mcp` object named `task-ledger-<slug>`. That is the project
+server. Keep the owner admin token in `task-ledger-admin`.
 
 Resource `ledger://live` is a markdown snapshot. Read-only.
-
-## HTTP fallback
-
-Base: `$LEDGER_URL`. Header: `Authorization: Bearer $LEDGER_TOKEN`.
-
-```
-POST /v1/$LEDGER_OWNER/ledgers
-POST /v1/$LEDGER_OWNER/tokens
-GET  /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/next
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/claim
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/notes
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/checks
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/phase
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/close
-POST /v1/$LEDGER_OWNER/$LEDGER_LEDGER/tasks/T-001/verify
-```
-
-Live view: `$LEDGER_URL/$LEDGER_OWNER/$LEDGER_LEDGER`
-Snapshot: `$LEDGER_URL/$LEDGER_OWNER/$LEDGER_LEDGER.md`

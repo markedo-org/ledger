@@ -18,21 +18,33 @@ down, not that we serve SSE. Start it with `make run`.
 
 ## Cursor / Claude Code config
 
+A project-only agent needs one server, named for that ledger, with a
+ledger-bound write token. A provisioner uses a server named for admin, with
+the owner admin token. If the same agent does both, keep both servers. See
+[`contrib/mcp.json.example`](../contrib/mcp.json.example).
+
 ```json
 {
   "mcpServers": {
-    "task-ledger": {
+    "task-ledger-admin": {
       "url": "http://127.0.0.1:8080/mcp",
       "headers": {
-        "Authorization": "Bearer lgr_dev"
+        "Authorization": "Bearer <owner-admin-token>"
+      }
+    },
+    "task-ledger-inbox": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer <ledger-write-token>"
       }
     }
   }
 }
 ```
 
-A token bound to one ledger (`acme/inbox` after a default boot) is enough.
-Tools default owner and ledger from that token.
+A token bound to one ledger is enough for project work. An owner-scoped
+token also defaults when that owner has exactly one ledger (the usual
+signup token). With several ledgers, pass `ledger` or mint a bound token.
 
 Install the agent skill with `npx skills add markedo-org/ledger -s task-ledger`.
 See `.agents/skills/task-ledger/`.

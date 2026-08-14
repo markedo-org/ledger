@@ -292,3 +292,96 @@ func TestMCPSetPhaseForce(t *testing.T) {
 		t.Fatalf("force %v %+v", err, forced)
 	}
 }
+
+func TestMCPOwnerScopedDefaultsToOnlyLedger(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	boot, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "acme", "inbox", "ada", boot); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	ctx := context.Background()
+	admin, err := a.Auth(ctx, boot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := a.CreateToken(ctx, admin, "acme", app.CreateTokenInput{Actor: "pat", Role: "write"})
+	if err != nil || issued.Token.LedgerSlug != "" {
+		t.Fatalf("owner-scoped token %+v %v", issued.Token, err)
+	}
+
+	httpSrv := httptest.NewServer(mcpserver.Handler(a))
+	t.Cleanup(httpSrv.Close)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v0.1.0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   httpSrv.URL,
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: issued.Plain}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	listed, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_tasks", Arguments: map[string]any{}})
+	if err != nil || listed.IsError {
+		t.Fatalf("list without ledger %v %+v", err, listed)
+	}
+	created, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"title":           "From owner-scoped token",
+			"idempotency_key": "own-1",
+		},
+	})
+	if err != nil || created.IsError {
+		t.Fatalf("create without ledger %v %+v", err, created)
+	}
+}
+
+func TestMCPCreateLedgerReturnsProjectMCP(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "acme", "inbox", "ada", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	a.PublicURL = "https://ledger.example"
+	httpSrv := httptest.NewServer(mcpserver.Handler(a))
+	t.Cleanup(httpSrv.Close)
+	ctx := context.Background()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v0.1.0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   httpSrv.URL,
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: tok}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "create_ledger",
+		Arguments: map[string]any{"slug": "jobs"},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("create_ledger %v %+v", err, res)
+	}
+	raw, _ := json.Marshal(res.StructuredContent)
+	if !strings.Contains(string(raw), `"task-ledger-jobs"`) || !strings.Contains(string(raw), `"token"`) {
+		t.Fatalf("expected project token and mcp: %s", raw)
+	}
+}

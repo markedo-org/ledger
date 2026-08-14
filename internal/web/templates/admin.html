@@ -3,11 +3,14 @@
 <header class="mast">
   <h1 class="brand">{{template "mark"}}admin</h1>
   <div class="meta">task-ledger · provision {{template "appearance"}}</div>
-  <p>Host-level. Create owners, mint the first token, and set max_ledgers. Same process as the live view.</p>
+  <p>Host-level. Create owners, mint tokens, and set max_ledgers. The first token on an owner is admin and owner-wide. For a project agent, mint a write token bound to that ledger.</p>
 </header>
 {{if .Message}}<p class="notice">{{.Message}}</p>{{end}}
 {{if .Issued}}
 <p class="notice">Bearer token (shown once): <code class="issued">{{.Issued}}</code></p>
+{{end}}
+{{if .MCP}}
+<pre><code>{{.MCP}}</code></pre>
 {{end}}
 
 <h2 class="phase">Owners</h2>
@@ -41,7 +44,7 @@
   <input id="ledger" name="ledger" pattern="[a-z][a-z0-9-]{0,62}">
   <label for="title">Ledger title (optional)</label>
   <input id="title" name="title">
-  <label for="actor">Admin actor to mint (optional)</label>
+  <label for="actor">Admin actor to mint (optional; owner-wide, not ledger-bound)</label>
   <input id="actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}">
   <label for="owner-email">Email for magic-link (optional)</label>
   <input id="owner-email" name="email" type="email">
@@ -60,6 +63,7 @@
 </form>
 
 <h2 class="phase">Create ledger</h2>
+<p>Set an actor to mint a ledger-bound write token and show the project MCP config. Leave actor blank to create the board only.</p>
 <form class="signin" method="post" action="/admin">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <input type="hidden" name="action" value="create_ledger">
@@ -69,6 +73,8 @@
   <input id="led-slug" name="slug" required>
   <label for="led-title">Title (optional)</label>
   <input id="led-title" name="title">
+  <label for="led-actor">Project actor (optional; mints a write token)</label>
+  <input id="led-actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}">
   <button type="submit">Create ledger</button>
 </form>
 
@@ -80,10 +86,10 @@
   <input id="tok-owner" name="owner" required>
   <label for="tok-actor">Actor</label>
   <input id="tok-actor" name="actor" required>
-  <label for="tok-ledger">Ledger (optional; empty is owner-wide)</label>
+  <label for="tok-ledger">Ledger (empty is owner-wide; set this for a project agent)</label>
   <input id="tok-ledger" name="ledger">
-  <label for="tok-role">Role (write or admin)</label>
-  <input id="tok-role" name="role" placeholder="admin">
+  <label for="tok-role">Role (write for a project agent, admin for a provisioner)</label>
+  <input id="tok-role" name="role" placeholder="write">
   <label for="tok-email">Email for magic-link (optional)</label>
   <input id="tok-email" name="email" type="email">
   <button type="submit">Mint token</button>

@@ -1,19 +1,17 @@
 # task-ledger
 
-A shared task list for people and AI agents. MIT. Markedo AS.
+When several agents share a project file, the last save wins. task-ledger is
+one live list on a server. Claim a task for a limited time. Everyone else can
+see that, and they wait.
 
-When several agents work the same project, a shared file becomes a fight. The
-last save wins. task-ledger is one live list on a server. If you are on a task,
-you claim it for a limited time. Everyone else can see that, and they wait.
+One Go binary, SQLite on disk. HTTP API, a read-only HTML board, and
+Streamable HTTP MCP. No user table: a minted bearer token is the identity.
 
-- One Go binary, SQLite on disk, nginx in front
-- HTTP API, read-only HTML live view, Streamable HTTP MCP
-- No user table. A minted bearer token is the identity
-- Self-host is first-class. Markedo also runs a hosted instance at
-  [task-ledger.com](https://task-ledger.com)
-  ([www.task-ledger.com](https://www.task-ledger.com))
+Self-host is the default. A hosted instance is at
+[task-ledger.com](https://task-ledger.com) if you do not want to run the
+binary. Same code.
 
-Module: `github.com/markedo-org/ledger`. Binary and slug: `ledger`.
+Go module: `github.com/markedo-org/ledger`. Binary name: `ledger`.
 
 ## Quick start
 
@@ -26,9 +24,9 @@ make build
 LEDGER_BOOT_TOKEN=lgr_dev ./ledger -listen 127.0.0.1:8080 -db ledger.sqlite
 ```
 
-On an empty database the process creates owner `acme`, ledger `inbox`, and
-actor `ada`, stores the boot token hashed, and prints it once. Set
-`LEDGER_BOOT_TOKEN` so you choose it. Later starts do not print a token.
+An empty database creates owner `acme`, ledger `inbox`, and actor `ada`. The
+boot token is stored hashed and printed once. Set `LEDGER_BOOT_TOKEN` so you
+choose it. Later starts do not print a token.
 
 ```bash
 export LEDGER_TOKEN=lgr_dev
@@ -41,56 +39,70 @@ open http://127.0.0.1:8080/acme/inbox
 curl -s http://127.0.0.1:8080/acme/inbox.md
 ```
 
-`make test` / `make lint`. Default listen is localhost. HTML is read-only.
-Sign in at `/login` with a bearer token. Optional SMTP enables a magic link
-for tokens that have an email bound at mint time. `LEDGER_OPERATOR_TOKEN`
-enables `/admin` and `POST /v1/owners`. GitHub OAuth is optional.
-`LEDGER_HTML_AUTH=1` locks the live view. The API still needs a bearer token.
-
-See [`docs/auth.md`](docs/auth.md). Production: [`docs/deploy.md`](docs/deploy.md).
-Meter and freeze: [`docs/provisioning.md`](docs/provisioning.md).
-
-## Hosted
-
-Markedo AS runs [task-ledger.com](https://task-ledger.com). The first ledger is
-free. Extra ledgers are paid. Sign up at
-[www.task-ledger.com/signup](https://www.task-ledger.com/signup).
-Self-host if you want the list on a machine you operate. Same binary.
-
-## Agent skill
-
-```bash
-npx skills add markedo-org/ledger -s task-ledger
-```
-
-Canonical files: `.agents/skills/task-ledger/`. Set `LEDGER_URL` and
-`LEDGER_TOKEN` in the consumer. Cursor `mcp.json` needs those values written
-out. It does not interpolate environment variables.
+`make test` / `make lint`. Default listen is localhost. HTML is a read-only
+board. Sign in at `/login` with a bearer token.
 
 ## MCP
 
-Streamable HTTP at `/mcp`, same bearer token. Stateless. Official Go SDK,
-protocol 2025-06-18. See [`docs/mcp.md`](docs/mcp.md).
+Streamable HTTP at `/mcp`, same bearer token. Stateless. See
+[`docs/mcp.md`](docs/mcp.md).
+
+A project-only agent gets one server, named for that ledger, with a
+ledger-bound write token. An agent that creates ledgers or mints tokens gets
+a second server named for admin, with the owner admin token. Both in one
+file:
 
 ```json
 {
   "mcpServers": {
-    "task-ledger": {
+    "task-ledger-admin": {
       "url": "http://127.0.0.1:8080/mcp",
-      "headers": { "Authorization": "Bearer lgr_dev" }
+      "headers": { "Authorization": "Bearer <owner-admin-token>" }
+    },
+    "task-ledger-inbox": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer <ledger-write-token>" }
     }
   }
 }
 ```
 
 Paste that into Cursor (`.cursor/mcp.json` or Settings → MCP) or Claude Code
-(project `.mcp.json`). ChatGPT and Claude on the web usually want OAuth. That
-is not in this binary yet.
+(project `.mcp.json`). Write the URL and token out. Cursor does not interpolate
+environment variables. ChatGPT and Claude on the web usually want OAuth. That
+is not in this binary yet. A fuller example is
+[`contrib/mcp.json.example`](contrib/mcp.json.example).
+
+Then install the agent skill. It teaches the loop (claim, note, close). It
+does not choose a host.
+
+```bash
+npx skills add markedo-org/ledger -s task-ledger
+```
+
+Canonical files: `.agents/skills/task-ledger/`.
+
+## Hosted
+
+Sign up at [www.task-ledger.com/signup](https://www.task-ledger.com/signup).
+The first ledger is free. Extra ledgers are paid. The live board is on the
+apex, [task-ledger.com](https://task-ledger.com).
+
+## Production
+
+[`docs/deploy.md`](docs/deploy.md) is the self-host path (binary, systemd,
+nginx). [`docs/auth.md`](docs/auth.md) covers token login, optional GitHub
+OAuth, and magic-link email. [`docs/provisioning.md`](docs/provisioning.md)
+covers `max_ledgers` and freeze.
+
+`LEDGER_OPERATOR_TOKEN` enables `/admin` and `POST /v1/owners`.
+`LEDGER_HTML_AUTH=1` locks the live view. The API and MCP still need a bearer
+token.
 
 ## API
 
-All mutating routes need `Authorization: Bearer`. Actor is the token, not a
-field on the body. Create requires `idempotency_key` (JSON or header
+Mutating routes need `Authorization: Bearer`. Actor is the token, not a field
+on the body. Create requires `idempotency_key` (JSON or header
 `Idempotency-Key`).
 
 | Method | Path | What |
@@ -131,6 +143,7 @@ minutes.
 | `docs/deploy.md` | Self-host and production |
 | `.agents/skills/task-ledger/` | Agent skill |
 
-## Licence
+## License
 
-MIT. See [SECURITY.md](SECURITY.md) to report a vulnerability.
+MIT. See [LICENSE](LICENSE). Report a vulnerability in
+[SECURITY.md](SECURITY.md).

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -68,6 +69,7 @@ func (s *Server) createOwner(c *gin.Context) {
 		body["token"] = created.Token.Plain
 		body["actor"] = created.Token.Token.Actor
 		body["role"] = created.Token.Token.Role
+		body["note"] = "Owner admin, not bound to the first ledger."
 	}
 	c.JSON(http.StatusCreated, body)
 }
@@ -174,7 +176,7 @@ func (s *Server) htmlAdminPost(c *gin.Context) {
 		if created.Token != nil {
 			issued = created.Token.Plain
 		}
-		s.renderAdmin(c, "Created owner "+created.Owner.Slug+".", issued)
+		s.renderAdmin(c, "Created owner "+created.Owner.Slug+". Token is owner admin, not bound to the first ledger.", issued)
 	case "set_max":
 		n, err := strconv.Atoi(strings.TrimSpace(c.PostForm("max_ledgers")))
 		if err != nil {
@@ -188,7 +190,8 @@ func (s *Server) htmlAdminPost(c *gin.Context) {
 		}
 		s.renderAdmin(c, "Set "+o.Slug+" max_ledgers to "+strconv.Itoa(o.MaxLedgers)+".", "")
 	case "create_ledger":
-		l, err := s.App.CreateLedger(ctx, tok, c.PostForm("owner"), app.CreateLedgerInput{
+		owner := c.PostForm("owner")
+		l, err := s.App.CreateLedger(ctx, tok, owner, app.CreateLedgerInput{
 			Slug:  c.PostForm("slug"),
 			Title: c.PostForm("title"),
 		})
@@ -196,7 +199,19 @@ func (s *Server) htmlAdminPost(c *gin.Context) {
 			s.renderAdmin(c, err.Error(), "")
 			return
 		}
-		s.renderAdmin(c, "Created ledger "+l.OwnerSlug+"/"+l.Slug+".", "")
+		issued, err := s.App.MintProjectWrite(ctx, tok, owner, l.Slug, app.ProjectActor(tok, c.PostForm("actor")))
+		if err != nil {
+			s.renderAdmin(c, err.Error(), "")
+			return
+		}
+		view := s.App.LedgerCreatedView(l, issued)
+		mcp, _ := json.MarshalIndent(view["mcp"], "", "  ")
+		plain := ""
+		if issued != nil {
+			plain = issued.Plain
+		}
+		note, _ := view["note"].(string)
+		s.renderAdminMCP(c, note, plain, string(mcp))
 	case "create_token":
 		issued, err := s.App.CreateToken(ctx, tok, c.PostForm("owner"), app.CreateTokenInput{
 			Actor:  c.PostForm("actor"),
@@ -214,7 +229,15 @@ func (s *Server) htmlAdminPost(c *gin.Context) {
 	}
 }
 
+func (s *Server) renderAdminMCP(c *gin.Context, message, issued, mcp string) {
+	s.renderAdminPage(c, message, issued, mcp)
+}
+
 func (s *Server) renderAdmin(c *gin.Context, message, issued string) {
+	s.renderAdminPage(c, message, issued, "")
+}
+
+func (s *Server) renderAdminPage(c *gin.Context, message, issued, mcp string) {
 	owners, err := s.App.ListOwners(c.Request.Context(), s.operatorToken())
 	if err != nil {
 		s.htmlErr(c, err)
@@ -245,6 +268,7 @@ func (s *Server) renderAdmin(c *gin.Context, message, issued string) {
 		"Title":   "Admin · task-ledger",
 		"Message": message,
 		"Issued":  issued,
+		"MCP":     mcp,
 		"Owners":  rows,
 	})); err != nil {
 		log.Printf("template: %v", err)
