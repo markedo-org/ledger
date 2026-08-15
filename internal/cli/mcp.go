@@ -16,7 +16,7 @@ func MCP(args []string) int {
 		}
 		return mcpPrint(args)
 	}
-	fmt.Fprintln(os.Stderr, "usage: ledger mcp print [--profile name] [--name task-ledger-admin]")
+	fmt.Fprintln(os.Stderr, "usage: ledger mcp print [--profile name] [--name task-ledger-admin] [--project-dir path] [--write-cursor] [--no-write-cursor]")
 	return 2
 }
 
@@ -25,7 +25,9 @@ func mcpPrint(args []string) int {
 	fs.SetOutput(os.Stderr)
 	profile := fs.String("profile", "", "config profile")
 	name := fs.String("name", "", "MCP server key (default task-ledger-admin, or task-ledger-<ledger>)")
-	writeCursor := fs.Bool("write-cursor", false, "merge into ./.cursor/mcp.json")
+	projectDir := fs.String("project-dir", "", "repo root or .cursor dir; write mcp.json there")
+	writeCursor := fs.Bool("write-cursor", false, "write ./.cursor/mcp.json even if .cursor is missing")
+	noWriteCursor := fs.Bool("no-write-cursor", false, "never write mcp.json")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -52,12 +54,13 @@ func mcpPrint(args []string) int {
 		return 1
 	}
 	fmt.Println(string(raw))
-	if *writeCursor {
-		if err := writeCursorMCP(raw); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		fmt.Fprintln(os.Stderr, "wrote .cursor/mcp.json")
+	wrote, err := maybeWriteCursor(*projectDir, *writeCursor, *noWriteCursor, raw)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if wrote != "" {
+		fmt.Fprintln(os.Stderr, "wrote "+wrote)
 	}
 	return 0
 }

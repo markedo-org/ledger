@@ -44,10 +44,12 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 
 | Command | What |
 | --- | --- |
-| `ledger init --owner --ledger --actor` | Empty DB: boot those names, write config, print token and MCP |
+| `ledger init --owner --ledger --actor` | Empty DB: boot those names, write config, print token and MCP. Writes `.cursor/mcp.json` if `.cursor` exists, or with `--project-dir` |
 | `ledger serve` | Run the server |
-| `ledger mcp print` | Print Cursor/Claude MCP JSON from the profile |
-| `ledger mcp print --write-cursor` | Merge into `./.cursor/mcp.json` |
+| `ledger mcp print` | Print Cursor/Claude MCP JSON from the profile. Writes `.cursor/mcp.json` if `.cursor` exists |
+| `ledger mcp print --project-dir PATH` | Write `PATH/.cursor/mcp.json` (creates `.cursor` if needed) |
+| `ledger mcp print --write-cursor` | Write `./.cursor/mcp.json` even if `.cursor` is missing |
+| `ledger mcp print --no-write-cursor` | Print only |
 | `ledger skill` | Print `npx skills add markedo-org/ledger -s task-ledger` (does not run it) |
 | `ledger owner create` | Operator. Optional `--ledger` and `--actor` mint owner admin |
 | `ledger owner list` | Operator |

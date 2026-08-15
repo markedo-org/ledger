@@ -108,7 +108,7 @@ func TestWriteCursorMerges(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(mcpObject("task-ledger-admin", "http://127.0.0.1:8080", "lgr_z"))
-	if err := writeCursorMCP(raw); err != nil {
+	if err := writeCursorMCP(filepath.Join(wd, ".cursor", "mcp.json"), raw); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(".cursor/mcp.json")
@@ -118,5 +118,91 @@ func TestWriteCursorMerges(t *testing.T) {
 	s := string(b)
 	if !strings.Contains(s, "other") || !strings.Contains(s, "task-ledger-admin") {
 		t.Fatalf("merge %s", s)
+	}
+}
+
+func TestInitWritesMCPWhenCursorDirExists(t *testing.T) {
+	isolateEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("LEDGER_CONFIG", filepath.Join(home, ".ledger", "config"))
+	t.Setenv("LEDGER_BOOT_TOKEN", "lgr_cur")
+	wd := t.TempDir()
+	t.Chdir(wd)
+	if err := os.Mkdir(".cursor", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code := Init([]string{"--owner", "acme", "--ledger", "inbox", "--actor", "ada", "--db", "t.db"}); code != 0 {
+		t.Fatalf("init %d", code)
+	}
+	b, err := os.ReadFile(filepath.Join(wd, ".cursor", "mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "task-ledger-admin") {
+		t.Fatalf("mcp %s", b)
+	}
+}
+
+func TestInitProjectDirCreatesCursor(t *testing.T) {
+	isolateEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("LEDGER_CONFIG", filepath.Join(home, ".ledger", "config"))
+	t.Setenv("LEDGER_BOOT_TOKEN", "lgr_proj")
+	wd := t.TempDir()
+	t.Chdir(wd)
+	proj := t.TempDir()
+	if code := Init([]string{"--owner", "acme", "--ledger", "inbox", "--actor", "ada", "--db", "t.db", "--project-dir", proj}); code != 0 {
+		t.Fatalf("init %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".cursor", "mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(wd, ".cursor", "mcp.json")); !os.IsNotExist(err) {
+		t.Fatal("cwd should not get mcp.json")
+	}
+}
+
+func TestProjectDirAcceptsCursorFolder(t *testing.T) {
+	isolateEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("LEDGER_CONFIG", filepath.Join(home, ".ledger", "config"))
+	t.Setenv("LEDGER_BOOT_TOKEN", "lgr_cursordir")
+	wd := t.TempDir()
+	t.Chdir(wd)
+	cursor := filepath.Join(t.TempDir(), ".cursor")
+	if err := os.MkdirAll(cursor, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code := Init([]string{"--owner", "acme", "--ledger", "inbox", "--actor", "ada", "--db", "t.db", "--project-dir", cursor}); code != 0 {
+		t.Fatalf("init %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(cursor, "mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInitNoWriteCursorSkipsExisting(t *testing.T) {
+	isolateEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("LEDGER_CONFIG", filepath.Join(home, ".ledger", "config"))
+	t.Setenv("LEDGER_BOOT_TOKEN", "lgr_nowrite")
+	wd := t.TempDir()
+	t.Chdir(wd)
+	if err := os.Mkdir(".cursor", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code := Init([]string{"--owner", "acme", "--ledger", "inbox", "--actor", "ada", "--db", "t.db", "--no-write-cursor"}); code != 0 {
+		t.Fatalf("init %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(wd, ".cursor", "mcp.json")); !os.IsNotExist(err) {
+		t.Fatal("should not write")
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/markedo-org/ledger/internal/cliconfig"
@@ -23,7 +22,9 @@ func Init(args []string) int {
 	dbPath := fs.String("db", "ledger.sqlite", "sqlite path")
 	listen := fs.String("listen", "127.0.0.1:8080", "address written into the config URL")
 	profile := fs.String("profile", "default", "config profile name")
-	writeCursor := fs.Bool("write-cursor", false, "merge MCP into ./.cursor/mcp.json")
+	projectDir := fs.String("project-dir", "", "repo root or .cursor dir; write mcp.json there")
+	writeCursor := fs.Bool("write-cursor", false, "write ./.cursor/mcp.json even if .cursor is missing")
+	noWriteCursor := fs.Bool("no-write-cursor", false, "never write mcp.json")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -85,11 +86,10 @@ func Init(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if *writeCursor {
-		if err := writeCursorMCP(raw); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
+	wrote, err := maybeWriteCursor(*projectDir, *writeCursor, *noWriteCursor, raw)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 
 	fmt.Printf("booted %s/%s actor=%s\n", *owner, *ledger, *actor)
@@ -102,8 +102,8 @@ func Init(args []string) int {
 	fmt.Println()
 	fmt.Println("Owner admin MCP (paste into .cursor/mcp.json):")
 	fmt.Println(string(raw))
-	if *writeCursor {
-		fmt.Println("wrote .cursor/mcp.json")
+	if wrote != "" {
+		fmt.Println("wrote " + wrote)
 	}
 	fmt.Println()
 	fmt.Println("This token is owner admin. For a project-only agent, start the server")
@@ -138,38 +138,3 @@ func mcpObject(name, origin, token string) map[string]any {
 	}
 }
 
-func writeCursorMCP(snippet []byte) error {
-	path := filepath.Join(".cursor", "mcp.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	var incoming struct {
-		Servers map[string]any `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(snippet, &incoming); err != nil {
-		return err
-	}
-	existing := map[string]any{}
-	if b, err := os.ReadFile(path); err == nil {
-		var cur struct {
-			Servers map[string]any `json:"mcpServers"`
-		}
-		if err := json.Unmarshal(b, &cur); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
-		}
-		if cur.Servers != nil {
-			existing = cur.Servers
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	for k, v := range incoming.Servers {
-		existing[k] = v
-	}
-	out, err := json.MarshalIndent(map[string]any{"mcpServers": existing}, "", "  ")
-	if err != nil {
-		return err
-	}
-	out = append(out, '\n')
-	return os.WriteFile(path, out, 0o600)
-}

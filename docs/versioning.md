@@ -30,15 +30,13 @@ Renaming or removing the list above is not.
 
 **Must be true before we cut v1.0.0:**
 
-1. Every shipped `VERSION` has a matching `v*` tag on `main`.
-2. GitHub Releases publish darwin/arm64, linux/amd64, and windows/amd64
-   (T-021). Getting Started can say download the binary or
-   `go install …@v1.0.0`.
-3. Local `init` → `serve` → MCP → create/claim/close has been used for
-   real work, not only tests.
-4. Hosted signup and at least one extra ledger have been used for real
-   work.
-5. We are willing to stop renaming the stable list above.
+| # | Gate | Status |
+| --- | --- | --- |
+| 1 | Every shipped `VERSION` has a matching `v*` tag on `main` | Done |
+| 2 | GitHub Releases for darwin/arm64, linux/amd64, windows/amd64. Getting Started can say download the binary or `go install …@v1.0.0` | Workflow on tag (`release.yml`). First artefacts ship with the next `v*` tag |
+| 3 | Local loop proven: `make smoke` exits 0 (`scripts/smoke.sh`: init, serve, create, claim, note, close). MCP uses the same app methods; the HTTP loop is the proof | Protocol is `make smoke` |
+| 4 | Hosted signup and at least one extra ledger used for real work | In progress (operator) |
+| 5 | We are willing to stop renaming the stable list above | Done |
 
 **Not required for 1.0:**
 
@@ -47,5 +45,5 @@ Renaming or removing the list above is not.
 - Homebrew, winget, or apt
 - A guarantee that hosted will run forever
 
-When those five are true, bump to 1.0.0, tag `v1.0.0`, and say so in the
-changelog. Until then we stay on 0.x.
+When 2 has a published release, 3 has a green `make smoke` on a laptop, and
+4 is ticked, bump to 1.0.0, tag `v1.0.0`, and say so in the changelog.

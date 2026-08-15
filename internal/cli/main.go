@@ -54,7 +54,7 @@ Config (~/.ledger/config, or $LEDGER_CONFIG):
   ledger config set [--profile name] url|token|owner|ledger <value>
 
 MCP snippet from the current profile:
-  ledger mcp print [--profile name] [--name task-ledger-admin] [--write-cursor]
+  ledger mcp print [--profile name] [--project-dir path] [--write-cursor] [--no-write-cursor]
 
 Agent skill (prints the install command; does not run it):
   ledger skill

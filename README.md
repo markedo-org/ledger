@@ -29,8 +29,10 @@ ledger init --owner acme --ledger inbox --actor ada
 ledger serve
 ```
 
+Binaries: [Releases](https://github.com/markedo-org/ledger/releases).
 `init` creates the database with *your* names, writes `~/.ledger/config`,
-and prints the owner admin token once. Open
+and prints the owner admin token once. If the current directory has
+`.cursor`, it also merges MCP there. Open
 `http://127.0.0.1:8080/acme/inbox`. `ledger mcp print` reprints the agent
 snippet. Full walkthrough: [docs/getting-started.md](docs/getting-started.md).
 CLI reference: [docs/cli.md](docs/cli.md).

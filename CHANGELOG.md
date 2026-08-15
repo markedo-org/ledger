@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.2
+
+`init` and `mcp print` write `.cursor/mcp.json` when the working directory
+already has a `.cursor` folder, or when `--project-dir` points at a repo.
+`--write-cursor` still forces a write. `--no-write-cursor` skips it. GitHub
+Release binaries build on `v*` tags. `make smoke` is the v1.0 local-loop
+protocol.
+
 ## 0.14.1
 
 `ledger skill` prints the `npx skills add` command. `init` prints it too.

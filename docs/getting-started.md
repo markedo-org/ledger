@@ -9,7 +9,9 @@ Hosted (we run the box) is [www.task-ledger.com/signup](https://www.task-ledger.
 
 ## Install
 
-Go 1.24+. Until GitHub Releases exist, build or `go install`.
+Go 1.24+. Or download a binary from
+[Releases](https://github.com/markedo-org/ledger/releases) (`ledger-darwin-arm64`,
+`ledger-linux-amd64`, `ledger-windows-amd64.exe`).
 
 macOS and Linux:
 
@@ -69,16 +71,18 @@ already does. Default listen is `127.0.0.1:8080`. Open
 
 ## Attach an agent
 
-`ledger mcp print` reprints the snippet from `~/.ledger/config`. Paste it
-into Cursor (`.cursor/mcp.json` or Settings → MCP) or Claude Code (project
-`.mcp.json`). Write the values out. Cursor does not interpolate environment
-variables.
+`ledger mcp print` reprints the snippet from `~/.ledger/config`. If you are
+in a repo that already has a `.cursor` folder, `init` and `mcp print` merge
+the server into `.cursor/mcp.json` and leave other servers alone. From
+elsewhere:
 
 ```bash
-ledger mcp print --write-cursor
+ledger mcp print --project-dir /path/to/repo
 ```
 
-merges into `./.cursor/mcp.json` and leaves other servers alone.
+`--write-cursor` writes `./.cursor/mcp.json` even if that folder is missing.
+`--no-write-cursor` prints only. Cursor does not interpolate environment
+variables.
 
 Then:
 
