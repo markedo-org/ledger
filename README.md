@@ -37,7 +37,7 @@ and prints the owner admin token once. If the current directory has
 snippet. Full walkthrough: [docs/getting-started.md](docs/getting-started.md).
 CLI reference: [docs/cli.md](docs/cli.md).
 
-`make test` / `make lint` from a clone. `ledger` with no subcommand still
+`make test` / `make lint` / `make smoke` from a clone. `ledger` with no subcommand still
 serves (same flags as before: `-listen`, `-db`).
 
 ## MCP

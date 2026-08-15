@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Criterion 3 for v1.0: init, serve, create, claim, note, close.
-# HTTP is the loop. MCP uses the same app methods.
+# v1.0 gate 3. See docs/smoke.md.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
@@ -25,7 +24,26 @@ export LEDGER_CONFIG="$TMP/config"
 export LEDGER_BOOT_TOKEN="$TOKEN"
 unset LEDGER_URL LEDGER_TOKEN LEDGER_PROFILE || true
 
-"$BIN" init --owner smoke --ledger inbox --actor ada --db "$TMP/t.db" --listen "$LISTEN" --no-write-cursor
+PROJ="$TMP/repo"
+"$BIN" init --owner smoke --ledger inbox --actor ada --db "$TMP/t.db" --listen "$LISTEN" --project-dir "$PROJ"
+MCP_JSON="$PROJ/.cursor/mcp.json"
+if [[ ! -f "$MCP_JSON" ]]; then
+  echo "smoke: init did not write $MCP_JSON" >&2
+  exit 1
+fi
+grep -q "task-ledger-admin" "$MCP_JSON" || {
+  echo "smoke: mcp.json missing task-ledger-admin" >&2
+  exit 1
+}
+grep -q "$TOKEN" "$MCP_JSON" || {
+  echo "smoke: mcp.json missing boot token" >&2
+  exit 1
+}
+grep -q "${BASE}/mcp" "$MCP_JSON" || {
+  echo "smoke: mcp.json missing ${BASE}/mcp" >&2
+  exit 1
+}
+
 "$BIN" serve -listen "$LISTEN" -db "$TMP/t.db" &
 PID=$!
 
@@ -43,7 +61,7 @@ if [[ "$ok" -ne 1 ]]; then
 fi
 
 auth=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
-curl -sf "${auth[@]}" -d '{"title":"Smoke loop","idempotency_key":"smoke-1"}' \
+curl -sf "${auth[@]}" -d '{"title":"Smoke HTTP","idempotency_key":"smoke-http-1"}' \
   "$BASE/v1/smoke/inbox/tasks" >/dev/null
 curl -sf "${auth[@]}" -d '{}' \
   "$BASE/v1/smoke/inbox/tasks/T-001/claim" >/dev/null
@@ -52,7 +70,10 @@ curl -sf "${auth[@]}" -d '{"body":"smoke note"}' \
 closed="$(curl -sf "${auth[@]}" -d '{"evidence":"scripts/smoke.sh"}' \
   "$BASE/v1/smoke/inbox/tasks/T-001/close")"
 echo "$closed" | grep -q '"phase":"DONE"' || {
-  echo "smoke: close did not return DONE: $closed" >&2
+  echo "smoke: HTTP close did not return DONE: $closed" >&2
   exit 1
 }
+
+(cd "$ROOT" && go run ./scripts/smokemcp -url "${BASE}/mcp" -token "$TOKEN" -key smoke-mcp-1)
+
 echo "smoke: ok"

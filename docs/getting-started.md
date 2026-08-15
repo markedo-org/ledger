@@ -139,6 +139,9 @@ ledger config set --profile op token "$LEDGER_OPERATOR_TOKEN"
 ledger owner create --profile op --slug other --ledger inbox --actor ada
 ```
 
+The install-and-loop proof we rerun before a release is
+[smoke.md](smoke.md) (`make smoke`).
+
 ## Next: a server you operate
 
 Same binary. `ledger init` on the box, or `ledger owner create` against it

@@ -33,8 +33,8 @@ Renaming or removing the list above is not.
 | # | Gate | Status |
 | --- | --- | --- |
 | 1 | Every shipped `VERSION` has a matching `v*` tag on `main` | Done |
-| 2 | GitHub Releases for darwin/arm64, linux/amd64, windows/amd64. Getting Started can say download the binary or `go install …@v1.0.0` | Workflow on tag (`release.yml`). First artefacts ship with the next `v*` tag |
-| 3 | Local loop proven: `make smoke` exits 0 (`scripts/smoke.sh`: init, serve, create, claim, note, close). MCP uses the same app methods; the HTTP loop is the proof | Protocol is `make smoke` |
+| 2 | GitHub Releases for darwin/arm64, linux/amd64, windows/amd64. Getting Started can say download the binary or `go install …@v1.0.0` | Done. [v0.14.2](https://github.com/markedo-org/ledger/releases/tag/v0.14.2) |
+| 3 | Local loop proven: `make smoke` exits 0. See [smoke.md](smoke.md): init writes `.cursor/mcp.json`, HTTP create/claim/note/close, MCP work loop on `/mcp` | Protocol is `make smoke` + `go test ./internal/workloop` |
 | 4 | Hosted signup and at least one extra ledger used for real work | In progress (operator) |
 | 5 | We are willing to stop renaming the stable list above | Done |
 
