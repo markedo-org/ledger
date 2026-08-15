@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS ledgers (
   slug TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
+  archive_done_after_days INTEGER,
+  purge_done_after_days INTEGER,
   UNIQUE(owner_id, slug)
 );
 

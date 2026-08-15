@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0
+
+DONE tasks stay stored. The default list and HTML board hide DONE older than
+`archive_done_after_days` (7). `0` means never hide. HTML Archive and
+`list_tasks` `done=true` show every DONE task, and only those. `get_task`
+still works. `purge_done_after_days` (0) may delete on reap; there is no
+MCP purge tool. Process defaults:
+`LEDGER_ARCHIVE_DONE_AFTER_DAYS`, `LEDGER_PURGE_DONE_AFTER_DAYS`. Per-ledger
+override: `ledger ledger set` / `PATCH /v1/:owner/ledgers/:ledger`.
+
 ## 0.14.2
 
 `init` and `mcp print` write `.cursor/mcp.json` when the working directory

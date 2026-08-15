@@ -65,12 +65,14 @@ type Owner struct {
 }
 
 type Ledger struct {
-	ID        string
-	OwnerID   string
-	OwnerSlug string
-	Slug      string
-	Title     string
-	CreatedAt time.Time
+	ID                   string
+	OwnerID              string
+	OwnerSlug            string
+	Slug                 string
+	Title                string
+	CreatedAt            time.Time
+	ArchiveDoneAfterDays *int // nil means use the process default
+	PurgeDoneAfterDays   *int // nil means use the process default
 }
 
 type Series struct {

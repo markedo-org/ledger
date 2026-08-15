@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/markedo-org/ledger/internal/app"
 	"github.com/markedo-org/ledger/internal/store"
@@ -68,6 +69,9 @@ func TestCreateAndHTML(t *testing.T) {
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`class="row" href="/markedo/meta/T-001"`)) {
 		t.Fatalf("board row link missing: %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`href="/markedo/meta?done=1"`)) {
+		t.Fatalf("archive link missing: %s", rec.Body.String())
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`id="theme-flip"`)) {
 		t.Fatalf("theme flip missing: %s", rec.Body.String())
@@ -131,5 +135,81 @@ func TestCreateAndHTML(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte(`class="done"`)) || !bytes.Contains(rec.Body.Bytes(), []byte("looks good")) {
 		t.Fatalf("task page %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHTMLArchiveAndHTTPDone(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	auth, err := a.Auth(context.Background(), tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.Create(context.Background(), auth, "markedo", "meta", app.CreateInput{
+		Title: "Closed", IdempotencyKey: "arch-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Close(context.Background(), auth, "markedo", "meta", "T-001", "closed"); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := a.Ledger(context.Background(), auth, "markedo", "meta")
+	if err := s.SetClosedAt(context.Background(), l.ID, "T-001", time.Now().UTC().AddDate(0, 0, -9)); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := web.New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || bytes.Contains(rec.Body.Bytes(), []byte("T-001")) {
+		t.Fatalf("board should hide old DONE: %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta?done=1", nil)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("T-001")) {
+		t.Fatalf("archive missing T-001: %d %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`href="/markedo/meta"`)) {
+		t.Fatalf("board link missing: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/markedo/meta/tasks", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || bytes.Contains(rec.Body.Bytes(), []byte("T-001")) {
+		t.Fatalf("HTTP default list: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/v1/markedo/meta/tasks?done=1", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("T-001")) {
+		t.Fatalf("HTTP done list: %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta/T-001", nil)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("Closed")) {
+		t.Fatalf("get hidden DONE: %d %s", rec.Code, rec.Body.String())
 	}
 }

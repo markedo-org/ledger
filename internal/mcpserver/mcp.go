@@ -73,7 +73,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.setMaxLedgers)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_tasks",
-		Description: "List tasks in a ledger (handle, title, phase, size, claimant). Thin index only: get_task before you act. Defaults to the token's ledger, or the owner's only ledger (typical signup token).",
+		Description: "List tasks in a ledger (handle, title, phase, size, claimant). Thin index only: get_task before you act. Default list hides DONE older than archive_done_after_days (7 unless the ledger overrides). Pass done=true for every DONE task, and only those. get_task still loads a hidden handle. Do not delete DONE tasks.",
 	}, h.listTasks)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_task",
@@ -312,6 +312,7 @@ type scopeIn struct {
 type listIn struct {
 	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
 	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
+	Done   bool   `json:"done,omitempty" jsonschema:"If true, list every DONE task and only DONE tasks. Default list hides DONE older than archive_done_after_days."`
 }
 
 type listOut struct {
@@ -342,7 +343,7 @@ func (h *host) listTasks(ctx context.Context, _ *mcp.CallToolRequest, in listIn)
 	if err != nil {
 		return nil, listOut{}, err
 	}
-	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger)
+	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{DoneOnly: in.Done})
 	if err != nil {
 		return nil, listOut{}, err
 	}
@@ -583,7 +584,7 @@ func (h *host) readLive(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp
 	if err != nil {
 		return nil, err
 	}
-	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger)
+	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{})
 	if err != nil {
 		return nil, err
 	}
@@ -623,6 +624,9 @@ func taskMap(t types.Task) map[string]any {
 	}
 	if t.VerifiedAt != nil {
 		m["verified_at"] = t.VerifiedAt.UTC().Format(time.RFC3339)
+	}
+	if t.ClosedAt != nil {
+		m["closed_at"] = t.ClosedAt.UTC().Format(time.RFC3339)
 	}
 	return m
 }

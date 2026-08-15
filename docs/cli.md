@@ -56,6 +56,7 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 | `ledger owner set-max --max-ledgers N` | Operator. `0` is unlimited |
 | `ledger ledger create --slug` | Owner admin. Mints a bound write token and returns `mcp` |
 | `ledger ledger list` | Owner admin or operator |
+| `ledger ledger set --slug --archive-done-after-days N --purge-done-after-days N` | Owner admin. Per-ledger DONE retention. `0` means never |
 | `ledger token mint --actor [--ledger] [--role write]` | Owner admin |
 
 `init --write-cursor` also merges the admin MCP server into

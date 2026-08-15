@@ -64,6 +64,16 @@ func Serve(args []string, version, commit, date string) int {
 	}
 
 	a := app.New(st)
+	archiveDays, purgeDays, err := app.RetentionFromEnv()
+	if err != nil {
+		log.Print(err)
+		return 1
+	}
+	a.ArchiveDoneAfterDays = archiveDays
+	a.PurgeDoneAfterDays = purgeDays
+	if archiveDays != app.DefaultArchiveDoneAfterDays || purgeDays != app.DefaultPurgeDoneAfterDays {
+		log.Printf("retention archive_done_after_days=%d purge_done_after_days=%d", archiveDays, purgeDays)
+	}
 	a.SetOperatorToken(os.Getenv("LEDGER_OPERATOR_TOKEN"))
 	if a.OperatorConfigured() {
 		log.Printf("operator token enabled")

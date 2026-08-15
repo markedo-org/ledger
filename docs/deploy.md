@@ -36,6 +36,10 @@ Optional: SMTP for magic-link sign-in (`docs/auth.md`). GitHub OAuth for host
 humans. `LEDGER_ROOT=url` plus `LEDGER_ROOT_URL` if the apex should send
 anonymous `GET /` to a brochure.
 
+DONE retention defaults (`LEDGER_ARCHIVE_DONE_AFTER_DAYS=7`,
+`LEDGER_PURGE_DONE_AFTER_DAYS=0`). `0` means never. Hosted should leave purge
+at `0`. A ledger can override with `ledger ledger set`.
+
 A fresh database boots `acme/inbox` with actor `ada` unless you pass
 `-boot-owner`, `-boot-ledger`, `-boot-actor`.
 

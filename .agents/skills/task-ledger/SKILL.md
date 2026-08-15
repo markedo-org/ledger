@@ -45,7 +45,9 @@ Two setups:
    admin token.
 
 `list_tasks` is a thin index (handle, title, phase, size, claimant).
-`get_task` before you act.
+Default list hides DONE older than the ledger's archive window. Pass
+`done=true` for every DONE task, and only those. `get_task` still works
+on a hidden handle. Do not delete DONE tasks.
 
 HTML `/login` is for humans. Agents use the bearer token, not the session
 cookie.
@@ -70,6 +72,7 @@ ask which write path they mean.
 7. Prefer `next_task` over list-then-claim.
 8. `list_tasks` is a thin index. `get_task` before you act.
 9. `verified_at` is set when someone verifies, not at create.
+10. Do not delete DONE tasks. Use `list_tasks` with `done=true` to see the archive.
 
 ## Tools
 

@@ -65,6 +65,7 @@ Against a running server (same commands for local, self-host, hosted):
   ledger owner set-max --owner acme --max-ledgers 2
   ledger ledger create --slug jobs
   ledger ledger list
+  ledger ledger set --slug inbox --archive-done-after-days 7 --purge-done-after-days 0
   ledger token mint --actor bot --ledger jobs --role write
 
 Profiles: --profile or $LEDGER_PROFILE. $LEDGER_URL and $LEDGER_TOKEN override.

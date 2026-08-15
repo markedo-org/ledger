@@ -15,7 +15,7 @@ import (
 	"github.com/markedo-org/ledger/internal/types"
 )
 
-func ownerJSON(o types.Owner, ledgers []app.LedgerInfo) gin.H {
+func (s *Server) ownerJSON(o types.Owner, ledgers []app.LedgerInfo) gin.H {
 	out := gin.H{
 		"slug":        o.Slug,
 		"max_ledgers": o.MaxLedgers,
@@ -24,13 +24,9 @@ func ownerJSON(o types.Owner, ledgers []app.LedgerInfo) gin.H {
 	if ledgers != nil {
 		ls := make([]gin.H, 0, len(ledgers))
 		for _, l := range ledgers {
-			ls = append(ls, gin.H{
-				"owner":      l.OwnerSlug,
-				"slug":       l.Slug,
-				"title":      l.Title,
-				"frozen":     l.Frozen,
-				"created_at": l.CreatedAt.UTC().Format(time.RFC3339),
-			})
+			item := s.ledgerJSON(l.Ledger)
+			item["frozen"] = l.Frozen
+			ls = append(ls, item)
 		}
 		out["ledgers"] = ls
 	}
@@ -57,7 +53,7 @@ func (s *Server) createOwner(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
-	body := ownerJSON(created.Owner, nil)
+	body := s.ownerJSON(created.Owner, nil)
 	if created.Ledger != nil {
 		body["ledger"] = gin.H{
 			"owner": created.Ledger.OwnerSlug,
@@ -82,7 +78,7 @@ func (s *Server) listOwners(c *gin.Context) {
 	}
 	out := make([]gin.H, 0, len(owners))
 	for _, o := range owners {
-		out = append(out, ownerJSON(o, nil))
+		out = append(out, s.ownerJSON(o, nil))
 	}
 	c.JSON(http.StatusOK, gin.H{"owners": out})
 }
@@ -93,7 +89,7 @@ func (s *Server) getOwner(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, ownerJSON(o, ledgers))
+	c.JSON(http.StatusOK, s.ownerJSON(o, ledgers))
 }
 
 func (s *Server) patchOwner(c *gin.Context) {
@@ -118,7 +114,7 @@ func (s *Server) patchOwner(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, ownerJSON(o, ledgers))
+	c.JSON(http.StatusOK, s.ownerJSON(o, ledgers))
 }
 
 func (s *Server) operatorToken() types.Token {

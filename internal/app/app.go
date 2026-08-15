@@ -32,14 +32,22 @@ var (
 )
 
 type App struct {
-	Store     *store.Store
-	operator  string
-	Mail      mail.Sender
-	PublicURL string
-	magic     *magicGate
+	Store                *store.Store
+	operator             string
+	Mail                 mail.Sender
+	PublicURL            string
+	magic                *magicGate
+	ArchiveDoneAfterDays int
+	PurgeDoneAfterDays   int
 }
 
-func New(s *store.Store) *App { return &App{Store: s} }
+func New(s *store.Store) *App {
+	return &App{
+		Store:                s,
+		ArchiveDoneAfterDays: DefaultArchiveDoneAfterDays,
+		PurgeDoneAfterDays:   DefaultPurgeDoneAfterDays,
+	}
+}
 
 func (a *App) SetOperatorToken(plain string) {
 	a.operator = strings.TrimSpace(plain)
@@ -165,17 +173,17 @@ func (a *App) Get(ctx context.Context, tok types.Token, owner, ledger, handle st
 	return t, err
 }
 
-func (a *App) List(ctx context.Context, tok types.Token, owner, ledger string) (types.Ledger, []types.Task, error) {
+func (a *App) List(ctx context.Context, tok types.Token, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, error) {
 	l, err := a.Ledger(ctx, tok, owner, ledger)
 	if err != nil {
 		return l, nil, err
 	}
-	tasks, err := a.Store.ListTasks(ctx, l.ID)
+	tasks, err := a.Store.ListTasks(ctx, l.ID, a.taskList(l, q))
 	return l, tasks, err
 }
 
 // ListPublic is the HTML/markdown read path. Bind to localhost in v1.
-func (a *App) ListPublic(ctx context.Context, owner, ledger string) (types.Ledger, []types.Task, error) {
+func (a *App) ListPublic(ctx context.Context, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, error) {
 	l, err := a.Store.ResolveLedger(ctx, owner, ledger)
 	if err == sql.ErrNoRows {
 		return l, nil, ErrNotFound
@@ -183,7 +191,7 @@ func (a *App) ListPublic(ctx context.Context, owner, ledger string) (types.Ledge
 	if err != nil {
 		return l, nil, err
 	}
-	tasks, err := a.Store.ListTasks(ctx, l.ID)
+	tasks, err := a.Store.ListTasks(ctx, l.ID, a.taskList(l, q))
 	return l, tasks, err
 }
 
@@ -401,7 +409,7 @@ func (a *App) Verify(ctx context.Context, tok types.Token, owner, ledger, handle
 }
 
 func (a *App) Next(ctx context.Context, tok types.Token, owner, ledger, prefix string, ttl time.Duration) (types.Task, error) {
-	_, tasks, err := a.List(ctx, tok, owner, ledger)
+	_, tasks, err := a.List(ctx, tok, owner, ledger, ListQuery{})
 	if err != nil {
 		return types.Task{}, err
 	}
@@ -436,7 +444,11 @@ func (a *App) Reap(ctx context.Context) (int, error) {
 		return n + s, err
 	}
 	m, err := a.Store.ReapMagicLinks(ctx)
-	return n + s + m, err
+	if err != nil {
+		return n + s + m, err
+	}
+	p, err := a.purgeDone(ctx)
+	return n + s + m + p, err
 }
 
 func (a *App) ListLedgersPublic(ctx context.Context, ownerSlug string) ([]LedgerInfo, error) {

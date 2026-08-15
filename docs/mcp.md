@@ -67,6 +67,11 @@ Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key
 `close_task` requires `evidence`. Moving a task later requires `reason`.
 `set_phase` accepts `force` to override the fourth-deferral block.
 
+`list_tasks` hides DONE older than `archive_done_after_days` (process default
+7, or the ledger override). Pass `done: true` for every DONE task, and only
+those. `get_task` still loads a hidden handle. There is no purge tool. The
+server may delete DONE after `purge_done_after_days` (default 0, never).
+
 ## Resource
 
 `ledger://live` is a markdown snapshot of the token's ledger. Read-only.

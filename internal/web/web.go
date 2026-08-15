@@ -83,6 +83,7 @@ func (s *Server) Engine() *gin.Engine {
 	v1.PATCH("/owners/:owner", s.patchOwner)
 	v1.GET("/:owner/ledgers", s.listLedgers)
 	v1.POST("/:owner/ledgers", s.createLedger)
+	v1.PATCH("/:owner/ledgers/:ledger", s.patchLedger)
 	v1.POST("/:owner/tokens", s.createToken)
 	v1.POST("/:owner/:ledger/tasks", s.create)
 	v1.GET("/:owner/:ledger/tasks", s.list)
@@ -164,7 +165,7 @@ func taskJSON(t types.Task) gin.H {
 	for i, ch := range t.Checks {
 		checks = append(checks, gin.H{"n": i + 1, "body": ch.Body, "done": ch.Done})
 	}
-	return gin.H{
+	h := gin.H{
 		"id":            t.ID,
 		"handle":        t.Handle,
 		"title":         t.Title,
@@ -183,6 +184,10 @@ func taskJSON(t types.Task) gin.H {
 		"depends_on":    append([]string{}, t.DependsOn...),
 		"since":         t.Since.UTC().Format("2006-01-02"),
 	}
+	if t.ClosedAt != nil {
+		h["closed_at"] = t.ClosedAt.UTC().Format(time.RFC3339)
+	}
+	return h
 }
 
 func (s *Server) listLedgers(c *gin.Context) {
@@ -193,14 +198,42 @@ func (s *Server) listLedgers(c *gin.Context) {
 	}
 	out := make([]gin.H, 0, len(ledgers))
 	for _, l := range ledgers {
-		out = append(out, gin.H{
-			"owner":      l.OwnerSlug,
-			"slug":       l.Slug,
-			"title":      l.Title,
-			"created_at": l.CreatedAt.UTC().Format(time.RFC3339),
-		})
+		out = append(out, s.ledgerJSON(l))
 	}
 	c.JSON(http.StatusOK, gin.H{"ledgers": out})
+}
+
+func (s *Server) ledgerJSON(l types.Ledger) gin.H {
+	archive, purge := s.App.EffectiveRetention(l)
+	return gin.H{
+		"owner":                   l.OwnerSlug,
+		"slug":                    l.Slug,
+		"title":                   l.Title,
+		"archive_done_after_days": archive,
+		"purge_done_after_days":   purge,
+		"created_at":              l.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func (s *Server) patchLedger(c *gin.Context) {
+	var in struct {
+		ArchiveDoneAfterDays *int `json:"archive_done_after_days"`
+		PurgeDoneAfterDays   *int `json:"purge_done_after_days"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		s.fail(c, err)
+		return
+	}
+	if in.ArchiveDoneAfterDays == nil && in.PurgeDoneAfterDays == nil {
+		s.fail(c, fmt.Errorf("%w: archive_done_after_days or purge_done_after_days required", app.ErrInvalid))
+		return
+	}
+	l, err := s.App.SetLedgerRetention(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), in.ArchiveDoneAfterDays, in.PurgeDoneAfterDays)
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, s.ledgerJSON(l))
 }
 
 func (s *Server) createLedger(c *gin.Context) {
@@ -299,8 +332,13 @@ func (s *Server) create(c *gin.Context) {
 	c.JSON(code, taskJSON(t))
 }
 
+func wantDone(c *gin.Context) bool {
+	v := strings.TrimSpace(c.Query("done"))
+	return v == "1" || strings.EqualFold(v, "true")
+}
+
 func (s *Server) list(c *gin.Context) {
-	_, tasks, err := s.App.List(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"))
+	_, tasks, err := s.App.List(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), app.ListQuery{DoneOnly: wantDone(c)})
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -521,7 +559,8 @@ func (s *Server) htmlLedger(c *gin.Context) {
 		s.markdown(c, owner, strings.TrimSuffix(ledger, ".md"))
 		return
 	}
-	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger)
+	archive := wantDone(c)
+	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{DoneOnly: archive})
 	if err != nil {
 		s.htmlErr(c, err)
 		return
@@ -540,6 +579,9 @@ func (s *Server) htmlLedger(c *gin.Context) {
 		Tasks []row
 	}
 	order := []types.Phase{types.PhaseNOW, types.PhaseNEXT, types.PhaseLATER, types.PhaseGATED, types.PhasePARKED, types.PhaseDONE}
+	if archive {
+		order = []types.Phase{types.PhaseDONE}
+	}
 	by := map[types.Phase][]row{}
 	now := time.Now().UTC()
 	for _, t := range tasks {
@@ -551,12 +593,17 @@ func (s *Server) htmlLedger(c *gin.Context) {
 	for _, p := range order {
 		phases = append(phases, phase{Name: string(p), Tasks: by[p]})
 	}
+	title := l.OwnerSlug + "/" + l.Slug
+	if archive {
+		title += " archive"
+	}
 	data := s.page(c, gin.H{
-		"Title":  l.OwnerSlug + "/" + l.Slug,
-		"Owner":  l.OwnerSlug,
-		"Ledger": l.Slug,
-		"Frozen": frozen,
-		"Phases": phases,
+		"Title":   title,
+		"Owner":   l.OwnerSlug,
+		"Ledger":  l.Slug,
+		"Frozen":  frozen,
+		"Archive": archive,
+		"Phases":  phases,
 	})
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
@@ -644,7 +691,7 @@ func countLabel(n int, one, many string) string {
 }
 
 func (s *Server) markdown(c *gin.Context, owner, ledger string) {
-	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger)
+	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{})
 	if err != nil {
 		s.htmlErr(c, err)
 		return

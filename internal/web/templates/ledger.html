@@ -2,8 +2,18 @@
 {{template "head" .}}
 <header class="mast">
   <h1 class="brand">{{template "mark"}}<a href="/{{.Owner}}/{{.Ledger}}">{{.Owner}}/{{.Ledger}}</a></h1>
-  <div class="meta">task-ledger · live {{template "appearance"}}</div>
+  <div class="meta">task-ledger · live {{template "appearance"}}
+    {{if .Archive}}
+    · <a href="/{{.Owner}}/{{.Ledger}}">Board</a>
+    {{else}}
+    · <a href="/{{.Owner}}/{{.Ledger}}?done=1">Archive</a>
+    {{end}}
+  </div>
+  {{if .Archive}}
+  <p>Closed tasks. Recent ones also stay on the board for a few days. The write path is the API.</p>
+  {{else}}
   <p>Read-only view of live state. The write path is the API. Do not edit a markdown snapshot.</p>
+  {{end}}
 </header>
 <p class="notice">Claims, leases, and who is on what live here. They do not belong in git.</p>
 {{if .Frozen}}

@@ -8,7 +8,7 @@ import (
 
 func Ledger(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list")
+		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list|set")
 		return 2
 	}
 	switch args[0] {
@@ -16,8 +16,10 @@ func Ledger(args []string) int {
 		return ledgerCreate(args[1:])
 	case "list":
 		return ledgerList(args[1:])
+	case "set":
+		return ledgerSet(args[1:])
 	default:
-		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list")
+		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list|set")
 		return 2
 	}
 }
@@ -85,6 +87,52 @@ func ledgerList(args []string) int {
 		return 2
 	}
 	out, err := c.do("GET", "/v1/"+*owner+"/ledgers", nil)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return printJSON(out)
+}
+
+func ledgerSet(args []string) int {
+	fs := flag.NewFlagSet("ledger set", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	profile := fs.String("profile", "", "config profile (owner admin)")
+	owner := fs.String("owner", "", "owner slug (default from profile)")
+	slug := fs.String("slug", "", "ledger slug")
+	archive := fs.Int("archive-done-after-days", -1, "days before DONE leaves the default list (0 = never)")
+	purge := fs.Int("purge-done-after-days", -1, "days before DONE is deleted (0 = never)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *slug == "" {
+		fmt.Fprintln(os.Stderr, "ledger set: --slug is required")
+		return 2
+	}
+	if *archive < 0 && *purge < 0 {
+		fmt.Fprintln(os.Stderr, "ledger set: --archive-done-after-days or --purge-done-after-days is required")
+		return 2
+	}
+	c, err := newAPI(*profile)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if *owner == "" {
+		*owner = c.owner
+	}
+	if *owner == "" {
+		fmt.Fprintln(os.Stderr, "ledger set: --owner is required")
+		return 2
+	}
+	body := map[string]any{}
+	if *archive >= 0 {
+		body["archive_done_after_days"] = *archive
+	}
+	if *purge >= 0 {
+		body["purge_done_after_days"] = *purge
+	}
+	out, err := c.do("PATCH", "/v1/"+*owner+"/ledgers/"+*slug, body)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

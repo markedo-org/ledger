@@ -65,6 +65,8 @@ func migrate(db *sql.DB) error {
   created_at TEXT NOT NULL
 )`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email) WHERE email != ''`,
+		`ALTER TABLE ledgers ADD COLUMN archive_done_after_days INTEGER`,
+		`ALTER TABLE ledgers ADD COLUMN purge_done_after_days INTEGER`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("migrate: %s: %w", stmt, err)
@@ -193,18 +195,11 @@ func (s *Store) LookupToken(ctx context.Context, tokenPlain string) (types.Token
 }
 
 func (s *Store) ResolveLedger(ctx context.Context, ownerSlug, ledgerSlug string) (types.Ledger, error) {
-	var l types.Ledger
-	var created string
-	err := s.db.QueryRowContext(ctx, `
-		SELECT l.id, l.owner_id, o.slug, l.slug, l.title, l.created_at
+	row := s.db.QueryRowContext(ctx, `
+		SELECT `+ledgerCols+`
 		FROM ledgers l JOIN owners o ON o.id = l.owner_id
-		WHERE o.slug = ? AND l.slug = ?`, ownerSlug, ledgerSlug).
-		Scan(&l.ID, &l.OwnerID, &l.OwnerSlug, &l.Slug, &l.Title, &created)
-	if err != nil {
-		return l, err
-	}
-	l.CreatedAt = parseTime(created)
-	return l, nil
+		WHERE o.slug = ? AND l.slug = ?`, ownerSlug, ledgerSlug)
+	return scanLedger(row)
 }
 
 func (s *Store) SeriesByPrefix(ctx context.Context, ledgerID, prefix string) (types.Series, error) {
@@ -324,10 +319,19 @@ func (s *Store) GetTask(ctx context.Context, ledgerID, handle string) (types.Tas
 	return task, err
 }
 
-func (s *Store) ListTasks(ctx context.Context, ledgerID string) ([]types.Task, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM tasks WHERE ledger_id = ? ORDER BY
+func (s *Store) ListTasks(ctx context.Context, ledgerID string, q TaskList) ([]types.Task, error) {
+	query := `SELECT id FROM tasks WHERE ledger_id = ?`
+	args := []any{ledgerID}
+	if q.DoneOnly {
+		query += ` AND phase = 'DONE'`
+	} else if q.ArchiveBefore != nil {
+		query += ` AND (phase != 'DONE' OR closed_at IS NULL OR closed_at >= ?)`
+		args = append(args, fmtTime(*q.ArchiveBefore))
+	}
+	query += ` ORDER BY
 		CASE phase WHEN 'NOW' THEN 0 WHEN 'NEXT' THEN 1 WHEN 'LATER' THEN 2 WHEN 'GATED' THEN 3 WHEN 'PARKED' THEN 4 WHEN 'DONE' THEN 5 ELSE 9 END,
-		rank ASC, n ASC`, ledgerID)
+		rank ASC, n ASC`
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

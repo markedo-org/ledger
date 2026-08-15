@@ -20,7 +20,7 @@ func (s *Store) CountLedgers(ctx context.Context, ownerID string) (int, error) {
 
 func (s *Store) ListLedgers(ctx context.Context, ownerID string) ([]types.Ledger, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT l.id, l.owner_id, o.slug, l.slug, l.title, l.created_at
+		SELECT `+ledgerCols+`
 		FROM ledgers l JOIN owners o ON o.id = l.owner_id
 		WHERE l.owner_id = ?
 		ORDER BY l.created_at ASC, l.rowid ASC`, ownerID)
@@ -30,12 +30,10 @@ func (s *Store) ListLedgers(ctx context.Context, ownerID string) ([]types.Ledger
 	defer rows.Close()
 	out := make([]types.Ledger, 0)
 	for rows.Next() {
-		var l types.Ledger
-		var created string
-		if err := rows.Scan(&l.ID, &l.OwnerID, &l.OwnerSlug, &l.Slug, &l.Title, &created); err != nil {
+		l, err := scanLedger(rows)
+		if err != nil {
 			return nil, err
 		}
-		l.CreatedAt = parseTime(created)
 		out = append(out, l)
 	}
 	return out, rows.Err()

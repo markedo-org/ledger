@@ -121,6 +121,11 @@ curl -s -H "Authorization: Bearer $LEDGER_TOKEN" \
 Or ask the attached agent to create one. Prefer `next_task` once there is
 work on the board.
 
+Closed tasks stay on the board for seven days, then drop off the default
+list and HTML view. The Archive link (`?done=1`) and `list_tasks` with
+`done=true` show every DONE task. `get_task` still loads a hidden handle.
+Nothing is deleted unless you set `purge_done_after_days` (default 0, never).
+
 ## More owners and ledgers
 
 Locally you already have the first owner. Extra ledgers:

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/markedo-org/ledger/internal/app"
 	"github.com/markedo-org/ledger/internal/mcpserver"
@@ -383,5 +384,70 @@ func TestMCPCreateLedgerReturnsProjectMCP(t *testing.T) {
 	raw, _ := json.Marshal(res.StructuredContent)
 	if !strings.Contains(string(raw), `"task-ledger-jobs"`) || !strings.Contains(string(raw), `"token"`) {
 		t.Fatalf("expected project token and mcp: %s", raw)
+	}
+}
+
+func TestMCPListDoneOnly(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "acme", "inbox", "ada", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	httpSrv := httptest.NewServer(mcpserver.Handler(a))
+	t.Cleanup(httpSrv.Close)
+	ctx := context.Background()
+	auth, err := a.Auth(ctx, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.Create(ctx, auth, "acme", "inbox", app.CreateInput{
+		Title: "Old done", IdempotencyKey: "mcp-done-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Close(ctx, auth, "acme", "inbox", "T-001", "closed"); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := a.Ledger(ctx, auth, "acme", "inbox")
+	if err := s.SetClosedAt(ctx, l.ID, "T-001", time.Now().UTC().AddDate(0, 0, -10)); err != nil {
+		t.Fatal(err)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v0.1.0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   httpSrv.URL,
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: tok}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	def, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_tasks", Arguments: map[string]any{}})
+	if err != nil || def.IsError {
+		t.Fatalf("default list %v %+v", err, def)
+	}
+	raw, _ := json.Marshal(def.StructuredContent)
+	if strings.Contains(string(raw), "T-001") {
+		t.Fatalf("default list should hide old DONE: %s", raw)
+	}
+	only, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "list_tasks",
+		Arguments: map[string]any{"done": true},
+	})
+	if err != nil || only.IsError {
+		t.Fatalf("done list %v %+v", err, only)
+	}
+	raw, _ = json.Marshal(only.StructuredContent)
+	if !strings.Contains(string(raw), "T-001") {
+		t.Fatalf("done list missing T-001: %s", raw)
 	}
 }
