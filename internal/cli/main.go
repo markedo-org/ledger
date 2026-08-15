@@ -25,6 +25,8 @@ func Main(args []string, version, commit, date string) int {
 		return Ledger(args[2:])
 	case "token":
 		return Token(args[2:])
+	case "skill":
+		return Skill(args[2:])
 	case "version", "-version", "--version":
 		fmt.Printf("ledger %s (%s %s)\n", version, commit, date)
 		return 0
@@ -53,6 +55,9 @@ Config (~/.ledger/config, or $LEDGER_CONFIG):
 
 MCP snippet from the current profile:
   ledger mcp print [--profile name] [--name task-ledger-admin] [--write-cursor]
+
+Agent skill (prints the install command; does not run it):
+  ledger skill
 
 Against a running server (same commands for local, self-host, hosted):
   ledger owner create --slug acme --ledger inbox --actor ada

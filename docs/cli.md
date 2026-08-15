@@ -48,6 +48,7 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 | `ledger serve` | Run the server |
 | `ledger mcp print` | Print Cursor/Claude MCP JSON from the profile |
 | `ledger mcp print --write-cursor` | Merge into `./.cursor/mcp.json` |
+| `ledger skill` | Print `npx skills add markedo-org/ledger -s task-ledger` (does not run it) |
 | `ledger owner create` | Operator. Optional `--ledger` and `--actor` mint owner admin |
 | `ledger owner list` | Operator |
 | `ledger owner set-max --max-ledgers N` | Operator. `0` is unlimited |

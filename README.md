@@ -118,6 +118,7 @@ minutes.
 | `internal/mcpserver/` | Streamable HTTP MCP |
 | `docs/getting-started.md` | Local tutorial |
 | `docs/cli.md` | CLI reference |
+| `docs/versioning.md` | 0.x tags and what 1.0 means |
 | `docs/deploy.md` | Self-host and production |
 | `.agents/skills/task-ledger/` | Agent skill |
 

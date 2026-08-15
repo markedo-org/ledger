@@ -83,8 +83,11 @@ merges into `./.cursor/mcp.json` and leaves other servers alone.
 Then:
 
 ```bash
+ledger skill
 npx skills add markedo-org/ledger -s task-ledger
 ```
+
+`ledger skill` only prints that `npx` line. It does not run it.
 
 The skill does not choose a host. The MCP config does.
 

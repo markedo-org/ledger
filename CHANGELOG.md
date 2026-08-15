@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1
+
+`ledger skill` prints the `npx skills add` command. `init` prints it too.
+Neither runs it. [docs/versioning.md](docs/versioning.md) is the 0.x / 1.0
+rule.
+
 ## 0.14.0
 
 The binary is also a provision CLI. `ledger init` boots an empty database

@@ -108,6 +108,9 @@ func Init(args []string) int {
 	fmt.Println()
 	fmt.Println("This token is owner admin. For a project-only agent, start the server")
 	fmt.Println("and run: ledger token mint --actor <name> --ledger " + *ledger + " --role write")
+	fmt.Println()
+	fmt.Println("Install the agent skill:")
+	fmt.Println("  " + SkillInstall)
 	return 0
 }
 

@@ -48,6 +48,12 @@ func TestInitWritesConfigAndMCP(t *testing.T) {
 	}
 }
 
+func TestSkillPrintsInstall(t *testing.T) {
+	if Skill(nil) != 0 {
+		t.Fatal("skill")
+	}
+}
+
 func TestMCPPrintJSON(t *testing.T) {
 	isolateEnv(t)
 	home := t.TempDir()
