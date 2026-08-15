@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0
+
+The binary is also a provision CLI. `ledger init` boots an empty database
+with your owner, ledger, and actor, writes `~/.ledger/config`, and prints
+MCP JSON. `ledger mcp print`, `owner`, `ledger`, and `token` talk HTTP to a
+running server (local, self-host, or hosted). Bare `ledger` / `ledger serve`
+is unchanged. Getting started covers macOS, Linux, and Windows.
+
 ## 0.13.1
 
 Owner-scoped tokens default MCP tools to the owner's only ledger. Create no

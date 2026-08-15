@@ -46,6 +46,9 @@ A token bound to one ledger is enough for project work. An owner-scoped
 token also defaults when that owner has exactly one ledger (the usual
 signup token). With several ledgers, pass `ledger` or mint a bound token.
 
+`ledger mcp print` emits this JSON from `~/.ledger/config`. See
+[cli.md](cli.md).
+
 Install the agent skill with `npx skills add markedo-org/ledger -s task-ledger`.
 See `.agents/skills/task-ledger/`.
 

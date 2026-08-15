@@ -17,6 +17,8 @@ and said MCP is down.
 
 The harness config (Cursor `.cursor/mcp.json`, Claude Code `.mcp.json`) is
 where the origin and bearer token live. This skill does not name a host.
+Humans provision with the `ledger` CLI (`init`, `mcp print`, `token mint`).
+Do not wrap that binary as stdio MCP.
 
 ## If the tools are missing
 

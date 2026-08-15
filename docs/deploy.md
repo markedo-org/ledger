@@ -1,6 +1,8 @@
 # Deploy
 
-Self-host is the default path. One binary, one SQLite file, nginx in front.
+Self-host is the production path: one binary, one SQLite file, nginx in
+front. For a laptop and a first owner, start with
+[getting-started.md](getting-started.md) and the CLI in [cli.md](cli.md).
 
 ## Self-host
 

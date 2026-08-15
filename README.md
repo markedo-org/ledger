@@ -4,43 +4,39 @@ When several agents share a project file, the last save wins. task-ledger is
 one live list on a server. Claim a task for a limited time. Everyone else can
 see that, and they wait.
 
-One Go binary, SQLite on disk. HTTP API, a read-only HTML board, and
-Streamable HTTP MCP. No user table: a minted bearer token is the identity.
+One Go binary, SQLite on disk. HTTP API, a read-only HTML board, Streamable
+HTTP MCP, and a provision CLI. No user table: a minted bearer token is the
+identity.
 
-Self-host is the default. A hosted instance is at
-[task-ledger.com](https://task-ledger.com) if you do not want to run the
-binary. Same code.
+Three ways to run it:
+
+- **Local.** Your laptop, many agents, `127.0.0.1`. Start here:
+  [docs/getting-started.md](docs/getting-started.md).
+- **Self-host.** The same binary on a machine you operate. systemd and
+  nginx: [docs/deploy.md](docs/deploy.md).
+- **Hosted.** We run the box.
+  [www.task-ledger.com](https://www.task-ledger.com). First ledger free.
 
 Go module: `github.com/markedo-org/ledger`. Binary name: `ledger`.
 
-## Quick start
+## Quick start (local)
 
-Go 1.24+.
-
-```bash
-git clone https://github.com/markedo-org/ledger.git
-cd ledger
-make build
-LEDGER_BOOT_TOKEN=lgr_dev ./ledger -listen 127.0.0.1:8080 -db ledger.sqlite
-```
-
-An empty database creates owner `acme`, ledger `inbox`, and actor `ada`. The
-boot token is stored hashed and printed once. Set `LEDGER_BOOT_TOKEN` so you
-choose it. Later starts do not print a token.
+Go 1.24+. macOS, Linux, or Windows.
 
 ```bash
-export LEDGER_TOKEN=lgr_dev
-curl -s -H "Authorization: Bearer $LEDGER_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"First task","idempotency_key":"demo-1"}' \
-  http://127.0.0.1:8080/v1/acme/inbox/tasks
-
-open http://127.0.0.1:8080/acme/inbox
-curl -s http://127.0.0.1:8080/acme/inbox.md
+go install github.com/markedo-org/ledger/cmd/ledger@latest
+ledger init --owner acme --ledger inbox --actor ada
+ledger serve
 ```
 
-`make test` / `make lint`. Default listen is localhost. HTML is a read-only
-board. Sign in at `/login` with a bearer token.
+`init` creates the database with *your* names, writes `~/.ledger/config`,
+and prints the owner admin token once. Open
+`http://127.0.0.1:8080/acme/inbox`. `ledger mcp print` reprints the agent
+snippet. Full walkthrough: [docs/getting-started.md](docs/getting-started.md).
+CLI reference: [docs/cli.md](docs/cli.md).
+
+`make test` / `make lint` from a clone. `ledger` with no subcommand still
+serves (same flags as before: `-listen`, `-db`).
 
 ## MCP
 
@@ -50,28 +46,7 @@ Streamable HTTP at `/mcp`, same bearer token. Stateless. See
 A project-only agent gets one server, named for that ledger, with a
 ledger-bound write token. An agent that creates ledgers or mints tokens gets
 a second server named for admin, with the owner admin token. Both in one
-file:
-
-```json
-{
-  "mcpServers": {
-    "task-ledger-admin": {
-      "url": "http://127.0.0.1:8080/mcp",
-      "headers": { "Authorization": "Bearer <owner-admin-token>" }
-    },
-    "task-ledger-inbox": {
-      "url": "http://127.0.0.1:8080/mcp",
-      "headers": { "Authorization": "Bearer <ledger-write-token>" }
-    }
-  }
-}
-```
-
-Paste that into Cursor (`.cursor/mcp.json` or Settings → MCP) or Claude Code
-(project `.mcp.json`). Write the URL and token out. Cursor does not interpolate
-environment variables. ChatGPT and Claude on the web usually want OAuth. That
-is not in this binary yet. A fuller example is
-[`contrib/mcp.json.example`](contrib/mcp.json.example).
+file. `ledger mcp print` emits that JSON from your profile.
 
 Then install the agent skill. It teaches the loop (claim, note, close). It
 does not choose a host.
@@ -86,7 +61,8 @@ Canonical files: `.agents/skills/task-ledger/`.
 
 Sign up at [www.task-ledger.com/signup](https://www.task-ledger.com/signup).
 The first ledger is free. Extra ledgers are paid. The live board is on the
-apex, [task-ledger.com](https://task-ledger.com).
+apex, [task-ledger.com](https://task-ledger.com). Point `ledger config` at
+that origin and the token you were shown. The CLI commands are the same.
 
 ## Production
 
@@ -134,12 +110,14 @@ minutes.
 
 | Path | What |
 | --- | --- |
-| `cmd/ledger/` | Server binary |
+| `cmd/ledger/` | Server and CLI binary |
+| `internal/cli/` | `init`, config, mcp print, owner/ledger/token |
 | `internal/app/` | Domain operations |
 | `internal/store/` | SQLite |
 | `internal/web/` | HTTP API, HTML |
 | `internal/mcpserver/` | Streamable HTTP MCP |
-| `docs/design.md` | Settled v1 cut |
+| `docs/getting-started.md` | Local tutorial |
+| `docs/cli.md` | CLI reference |
 | `docs/deploy.md` | Self-host and production |
 | `.agents/skills/task-ledger/` | Agent skill |
 
