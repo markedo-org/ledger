@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	slugRe   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+	// Letter or digit first. Years and numbered projects are valid slugs.
+	slugRe   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 	actorRe  = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 	handleRe = regexp.MustCompile(`^([A-Za-z])-(\d{1,9})$`)
 )

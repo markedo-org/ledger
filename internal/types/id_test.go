@@ -15,3 +15,18 @@ func TestHandleRoundTrip(t *testing.T) {
 		t.Fatal("canonical")
 	}
 }
+
+func TestValidSlug(t *testing.T) {
+	ok := []string{"acme", "a", "repo-name", "x12", "2027", "1acme"}
+	bad := []string{"", "Acme", "-no", "has_underscore", "Has-Dash"}
+	for _, s := range ok {
+		if !ValidSlug(s) {
+			t.Fatalf("expected valid %q", s)
+		}
+	}
+	for _, s := range bad {
+		if ValidSlug(s) {
+			t.Fatalf("expected invalid %q", s)
+		}
+	}
+}

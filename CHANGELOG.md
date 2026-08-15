@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.2
+
+Owner and ledger slugs may start with a digit (`2027`, `1acme`). They still
+must be lowercase letters, digits, or hyphens, and must not start with a
+hyphen. Actor names still start with a letter.
+
 ## 0.15.1
 
 Admin provision page: each action is a framed block with a display title
