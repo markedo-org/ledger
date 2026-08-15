@@ -280,7 +280,14 @@ func (h *host) createOwner(ctx context.Context, _ *mcp.CallToolRequest, in creat
 		out["actor"] = created.Token.Token.Actor
 		out["role"] = created.Token.Token.Role
 		out["token"] = created.Token.Plain
-		out["note"] = "Owner admin, not bound to the first ledger. Name its MCP server for admin. For a project-only agent, create_token with ledger set and role write."
+		out["mcp"] = h.app.AgentMCPConfig("task-ledger-admin", created.Token.Plain)
+		out["note"] = "Owner admin, not bound to the first ledger. Name its MCP server task-ledger-admin. The write_token is for the first ledger only."
+	}
+	if created.WriteToken != nil && created.Ledger != nil {
+		out["write_token"] = created.WriteToken.Plain
+		out["write_role"] = created.WriteToken.Token.Role
+		out["write_ledger"] = created.Ledger.Slug
+		out["write_mcp"] = h.app.AgentMCPConfig("task-ledger-"+created.Ledger.Slug, created.WriteToken.Plain)
 	}
 	return nil, out, nil
 }

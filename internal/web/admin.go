@@ -65,7 +65,14 @@ func (s *Server) createOwner(c *gin.Context) {
 		body["token"] = created.Token.Plain
 		body["actor"] = created.Token.Token.Actor
 		body["role"] = created.Token.Token.Role
-		body["note"] = "Owner admin, not bound to the first ledger."
+		body["note"] = "Owner admin, not bound to the first ledger. Name its MCP server task-ledger-admin."
+		body["mcp"] = s.App.AgentMCPConfig("task-ledger-admin", created.Token.Plain)
+	}
+	if created.WriteToken != nil && created.Ledger != nil {
+		body["write_token"] = created.WriteToken.Plain
+		body["write_role"] = created.WriteToken.Token.Role
+		body["write_ledger"] = created.Ledger.Slug
+		body["write_mcp"] = s.App.AgentMCPConfig("task-ledger-"+created.Ledger.Slug, created.WriteToken.Plain)
 	}
 	c.JSON(http.StatusCreated, body)
 }

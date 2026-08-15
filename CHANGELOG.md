@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.3
+
+Creating an owner with a first ledger mints two tokens: owner admin, and a
+ledger-bound write token for that ledger. HTTP and MCP return `write_token`
+and `write_mcp` beside the admin `token` and `mcp`.
+
 ## 0.15.2
 
 Owner and ledger slugs may start with a digit (`2027`, `1acme`). They still

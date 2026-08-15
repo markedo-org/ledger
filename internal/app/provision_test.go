@@ -31,8 +31,15 @@ func TestOperatorProvisionAndFreeze(t *testing.T) {
 		t.Fatalf("create owner %+v %v", created, err)
 	}
 	ada, err := a.Auth(ctx, created.Token.Plain)
-	if err != nil || ada.Role != types.RoleAdmin || ada.OwnerSlug != "acme" {
-		t.Fatalf("minted token %+v %v", ada, err)
+	if err != nil || ada.Role != types.RoleAdmin || ada.OwnerSlug != "acme" || ada.LedgerSlug != "" {
+		t.Fatalf("minted admin %+v %v", ada, err)
+	}
+	if created.WriteToken == nil {
+		t.Fatal("expected first-ledger write token")
+	}
+	write, err := a.Auth(ctx, created.WriteToken.Plain)
+	if err != nil || write.Role != types.RoleWrite || write.OwnerSlug != "acme" || write.LedgerSlug != "inbox" {
+		t.Fatalf("minted write %+v %v", write, err)
 	}
 	if _, err := a.CreateLedger(ctx, ada, "acme", app.CreateLedgerInput{Slug: "extra"}); err == nil {
 		t.Fatal("expected cap at 1")

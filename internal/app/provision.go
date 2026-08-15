@@ -33,9 +33,10 @@ type CreateOwnerInput struct {
 }
 
 type CreatedOwner struct {
-	Owner  types.Owner
-	Ledger *types.Ledger
-	Token  *IssuedToken
+	Owner      types.Owner
+	Ledger     *types.Ledger
+	Token      *IssuedToken // owner-scoped admin
+	WriteToken *IssuedToken // ledger-bound write for the first ledger
 }
 
 func (a *App) CreateOwner(ctx context.Context, tok types.Token, in CreateOwnerInput) (CreatedOwner, error) {
@@ -82,6 +83,11 @@ func (a *App) CreateOwner(ctx context.Context, tok types.Token, in CreateOwnerIn
 		return out, err
 	}
 	out.Token = &issued
+	write, err := a.MintProjectWrite(ctx, tok, slug, ledgerSlug, actor)
+	if err != nil {
+		return out, err
+	}
+	out.WriteToken = write
 	return out, nil
 }
 
