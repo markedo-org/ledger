@@ -3,7 +3,7 @@
 <header class="mast">
   <h1 class="brand">{{template "mark"}}admin</h1>
   <div class="meta">task-ledger · provision {{template "appearance"}}</div>
-  <p>Host-level. Create owners, mint tokens, and set max_ledgers. The first token on an owner is admin and owner-wide. For a project agent, mint a write token bound to that ledger.</p>
+  <p>Host-level provision. Owner admin tokens cannot use this page. For a project agent, mint a write token bound to one ledger.</p>
 </header>
 {{if .Message}}<p class="notice">{{.Message}}</p>{{end}}
 {{if .Issued}}
@@ -13,86 +13,110 @@
 <pre><code>{{.MCP}}</code></pre>
 {{end}}
 
-<h2 class="phase">Owners</h2>
-{{if .Owners}}
-<ol class="register">
-  {{range .Owners}}
-  <li>
-    <div class="row">
-      <span class="handle">{{.Slug}}</span>
-      <span class="row-main">
-        <span class="title">max_ledgers {{.MaxLedgers}}</span>
-        <span class="row-meta">{{range $i, $l := .Ledgers}}{{if $i}} · {{end}}<a href="/{{.Slug}}/{{$l.Slug}}">{{$l.Slug}}</a>{{if $l.Frozen}} (read-only){{end}}{{end}}</span>
-      </span>
-    </div>
-  </li>
+<section class="desk">
+  <h2>Owners</h2>
+  <p class="lede">Who has boards on this host. Ledgers newer than the cap are read-only.</p>
+  {{if .Owners}}
+  <ol class="register">
+    {{range .Owners}}
+    <li>
+      <div class="row">
+        <span class="handle">{{.Slug}}</span>
+        <span class="row-main">
+          <span class="title">max_ledgers {{.MaxLedgers}}</span>
+          <span class="row-meta">{{range $i, $l := .Ledgers}}{{if $i}} · {{end}}<a href="/{{.Slug}}/{{$l.Slug}}">{{$l.Slug}}</a>{{if $l.Frozen}} (read-only){{end}}{{end}}</span>
+        </span>
+      </div>
+    </li>
+    {{end}}
+  </ol>
+  {{else}}
+  <p class="empty">None yet. Create an owner below.</p>
   {{end}}
-</ol>
-{{else}}
-<p class="empty">None.</p>
-{{end}}
+</section>
 
-<h2 class="phase">Create owner</h2>
-<form class="signin" method="post" action="/admin">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="action" value="create_owner">
-  <label for="slug">Owner slug</label>
-  <input id="slug" name="slug" required pattern="[a-z][a-z0-9-]{0,62}">
-  <label for="max_ledgers">max_ledgers (blank is 1)</label>
-  <input id="max_ledgers" name="max_ledgers" inputmode="numeric" placeholder="1">
-  <label for="ledger">First ledger (optional)</label>
-  <input id="ledger" name="ledger" pattern="[a-z][a-z0-9-]{0,62}">
-  <label for="title">Ledger title (optional)</label>
-  <input id="title" name="title">
-  <label for="actor">Admin actor to mint (optional; owner-wide, not ledger-bound)</label>
-  <input id="actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}">
-  <label for="owner-email">Email for magic-link (optional)</label>
-  <input id="owner-email" name="email" type="email">
-  <button type="submit">Create owner</button>
-</form>
+<section class="desk">
+  <h2>Create owner</h2>
+  <p class="lede">A customer or workspace. If you mint an actor, that token is owner admin, not bound to the first ledger.</p>
+  <form class="signin" method="post" action="/admin">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="create_owner">
+    <label for="slug">Owner slug</label>
+    <input id="slug" name="slug" required pattern="[a-z][a-z0-9-]{0,62}" autocomplete="off">
+    <label for="max_ledgers">max_ledgers</label>
+    <input id="max_ledgers" name="max_ledgers" inputmode="numeric" placeholder="1">
+    <p class="hint">Blank is 1. 0 is unlimited.</p>
+    <label for="ledger">First ledger</label>
+    <input id="ledger" name="ledger" pattern="[a-z][a-z0-9-]{0,62}" autocomplete="off">
+    <p class="hint">Optional. Creates the first board under this owner.</p>
+    <label for="title">Ledger title</label>
+    <input id="title" name="title">
+    <label for="actor">Admin actor</label>
+    <input id="actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}" autocomplete="off">
+    <p class="hint">Optional. Mints an owner-wide admin token, shown once.</p>
+    <label for="owner-email">Email</label>
+    <input id="owner-email" name="email" type="email">
+    <p class="hint">Optional. Binds the minted token for magic-link sign-in.</p>
+    <button type="submit">Create owner</button>
+  </form>
+</section>
 
-<h2 class="phase">Set max_ledgers</h2>
-<form class="signin" method="post" action="/admin">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="action" value="set_max">
-  <label for="set-owner">Owner slug</label>
-  <input id="set-owner" name="owner" required>
-  <label for="set-max">max_ledgers</label>
-  <input id="set-max" name="max_ledgers" required inputmode="numeric">
-  <button type="submit">Set cap</button>
-</form>
+<section class="desk">
+  <h2>Set cap</h2>
+  <p class="lede">How many writable ledgers this owner may have. Newest extras freeze until the cap rises.</p>
+  <form class="signin" method="post" action="/admin">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="set_max">
+    <label for="set-owner">Owner slug</label>
+    <input id="set-owner" name="owner" required autocomplete="off">
+    <label for="set-max">max_ledgers</label>
+    <input id="set-max" name="max_ledgers" required inputmode="numeric">
+    <p class="hint">0 is unlimited.</p>
+    <button type="submit">Set cap</button>
+  </form>
+</section>
 
-<h2 class="phase">Create ledger</h2>
-<p>Set an actor to mint a ledger-bound write token and show the project MCP config. Leave actor blank to create the board only.</p>
-<form class="signin" method="post" action="/admin">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="action" value="create_ledger">
-  <label for="led-owner">Owner slug</label>
-  <input id="led-owner" name="owner" required>
-  <label for="led-slug">Ledger slug</label>
-  <input id="led-slug" name="slug" required>
-  <label for="led-title">Title (optional)</label>
-  <input id="led-title" name="title">
-  <label for="led-actor">Project actor (optional; mints a write token)</label>
-  <input id="led-actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}">
-  <button type="submit">Create ledger</button>
-</form>
+<section class="desk">
+  <h2>Create ledger</h2>
+  <p class="lede">A project board under an owner. Set an actor to mint a write token and show the project MCP snippet. Leave actor blank to create the board only.</p>
+  <form class="signin" method="post" action="/admin">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="create_ledger">
+    <label for="led-owner">Owner slug</label>
+    <input id="led-owner" name="owner" required autocomplete="off">
+    <label for="led-slug">Ledger slug</label>
+    <input id="led-slug" name="slug" required autocomplete="off">
+    <label for="led-title">Title</label>
+    <input id="led-title" name="title">
+    <p class="hint">Optional. Defaults to the slug.</p>
+    <label for="led-actor">Project actor</label>
+    <input id="led-actor" name="actor" pattern="[a-z][a-z0-9_-]{0,63}" autocomplete="off">
+    <p class="hint">Optional. Mints a ledger-bound write token, shown once.</p>
+    <button type="submit">Create ledger</button>
+  </form>
+</section>
 
-<h2 class="phase">Mint token</h2>
-<form class="signin" method="post" action="/admin">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="action" value="create_token">
-  <label for="tok-owner">Owner slug</label>
-  <input id="tok-owner" name="owner" required>
-  <label for="tok-actor">Actor</label>
-  <input id="tok-actor" name="actor" required>
-  <label for="tok-ledger">Ledger (empty is owner-wide; set this for a project agent)</label>
-  <input id="tok-ledger" name="ledger">
-  <label for="tok-role">Role (write for a project agent, admin for a provisioner)</label>
-  <input id="tok-role" name="role" placeholder="write">
-  <label for="tok-email">Email for magic-link (optional)</label>
-  <input id="tok-email" name="email" type="email">
-  <button type="submit">Mint token</button>
-</form>
+<section class="desk">
+  <h2>Mint token</h2>
+  <p class="lede">write plus a ledger is a project agent. admin with no ledger is a provisioner for that owner.</p>
+  <form class="signin" method="post" action="/admin">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="action" value="create_token">
+    <label for="tok-owner">Owner slug</label>
+    <input id="tok-owner" name="owner" required autocomplete="off">
+    <label for="tok-actor">Actor</label>
+    <input id="tok-actor" name="actor" required autocomplete="off">
+    <label for="tok-ledger">Ledger</label>
+    <input id="tok-ledger" name="ledger" autocomplete="off">
+    <p class="hint">Empty is owner-wide. Set this for a project agent.</p>
+    <label for="tok-role">Role</label>
+    <input id="tok-role" name="role" placeholder="write" autocomplete="off">
+    <p class="hint">write for a project agent. admin for a provisioner.</p>
+    <label for="tok-email">Email</label>
+    <input id="tok-email" name="email" type="email">
+    <p class="hint">Optional. Binds this token for magic-link sign-in.</p>
+    <button type="submit">Mint token</button>
+  </form>
+</section>
 {{template "foot" .}}
 {{end}}

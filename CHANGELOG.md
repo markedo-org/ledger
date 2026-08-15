@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.1
+
+Admin provision page: each action is a framed block with a display title
+and a short explanation. Labels stay short. The type and palette are
+unchanged.
+
 ## 0.15.0
 
 DONE tasks stay stored. The default list and HTML board hide DONE older than

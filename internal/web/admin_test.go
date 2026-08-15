@@ -101,4 +101,10 @@ func TestOperatorHTTPAndAdminPage(t *testing.T) {
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("acme")) {
 		t.Fatalf("admin page %d %s", rec.Code, rec.Body.String())
 	}
+	page := rec.Body.Bytes()
+	for _, want := range []string{`class="desk"`, "Create owner", "Set cap", "Create ledger", "Mint token"} {
+		if !bytes.Contains(page, []byte(want)) {
+			t.Fatalf("admin framing missing %q", want)
+		}
+	}
 }
