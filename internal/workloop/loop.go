@@ -67,6 +67,13 @@ func Run(ctx context.Context, session *mcp.ClientSession, key string) error {
 	if strings.TrimSpace(fmt.Sprint(claimed["claimed_by"])) == "" {
 		return fmt.Errorf("claim_task: empty claimed_by")
 	}
+	claimID, _ := claimed["claim_id"].(string)
+	if !strings.HasPrefix(claimID, "clm_") {
+		return fmt.Errorf("claim_task: missing claim_id in %v", claimed)
+	}
+	if _, ok := got["claim_id"]; ok {
+		return fmt.Errorf("get_task must omit claim_id")
+	}
 	note, err := call(ctx, session, "add_note", map[string]any{
 		"handle": handle,
 		"body":   "workloop note",
@@ -80,6 +87,7 @@ func Run(ctx context.Context, session *mcp.ClientSession, key string) error {
 	closed, err := call(ctx, session, "close_task", map[string]any{
 		"handle":   handle,
 		"evidence": "internal/workloop",
+		"claim_id": claimID,
 	})
 	if err != nil {
 		return err

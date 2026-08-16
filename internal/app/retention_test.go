@@ -60,7 +60,7 @@ func TestListHidesOldDone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done"); err != nil {
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done", ""); err != nil {
 		t.Fatal(err)
 	}
 	l, err := a.Ledger(ctx, tok, "markedo", "meta")
@@ -99,7 +99,7 @@ func TestRecentDoneStaysOnBoard(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "just now"); err != nil {
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "just now", ""); err != nil {
 		t.Fatal(err)
 	}
 	_, board, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
@@ -117,7 +117,7 @@ func TestArchiveZeroKeepsDone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done"); err != nil {
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done", ""); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := a.Ledger(ctx, tok, "markedo", "meta")
@@ -138,7 +138,7 @@ func TestPurgeDeletesOldDone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done"); err != nil {
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done", ""); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := a.Ledger(ctx, tok, "markedo", "meta")
@@ -166,7 +166,7 @@ func TestPurgeZeroNeverDeletes(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done"); err != nil {
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done", ""); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := a.Ledger(ctx, tok, "markedo", "meta")

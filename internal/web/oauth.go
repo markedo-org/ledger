@@ -110,6 +110,7 @@ func (s *Server) page(c *gin.Context, data gin.H) gin.H {
 		data["Operator"] = sess.IsOperator()
 	}
 	data["Magic"] = s.App.MailEnabled()
+	data["SiteURL"] = strings.TrimRight(s.SiteURL, "/")
 	return data
 }
 

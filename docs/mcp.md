@@ -67,6 +67,13 @@ Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key
 `close_task` requires `evidence`. Moving a task later requires `reason`.
 `set_phase` accepts `force` to override the fourth-deferral block.
 
+`claim_task` and `next_task` return `claim_id` once. Keep it in that chat.
+Pass it on heartbeat, same-actor re-claim, release, close, and phase while
+the lease is live. `get_task`, `list_tasks`, and HTML never include it.
+Leases created before this field stay on the old same-actor refresh until
+they expire. Steal from another actor issues a new `claim_id`. There is no
+recover-my-own-lease path.
+
 `list_tasks` hides DONE older than `archive_done_after_days` (process default
 7, or the ledger override). Pass `done: true` for every DONE task, and only
 those. `get_task` still loads a hidden handle. There is no purge tool. The

@@ -2,7 +2,9 @@ package app_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,10 +90,18 @@ func TestCreateClaimClose(t *testing.T) {
 		t.Fatalf("claim %v %+v", err, held)
 	}
 
-	if _, err = a.Close(ctx, tok, "markedo", "meta", "T-001", ""); err == nil {
+	if held.ClaimID == "" || !strings.HasPrefix(held.ClaimID, "clm_") {
+		t.Fatalf("claim_id %q", held.ClaimID)
+	}
+	got, err := a.Get(ctx, tok, "markedo", "meta", "T-001")
+	if err != nil || got.ClaimID != "" {
+		t.Fatalf("get must omit claim_id: %+v %v", got, err)
+	}
+
+	if _, err = a.Close(ctx, tok, "markedo", "meta", "T-001", "", held.ClaimID); err == nil {
 		t.Fatal("close without evidence")
 	}
-	closed, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "tests pass")
+	closed, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "tests pass", held.ClaimID)
 	if err != nil || closed.Phase != types.PhaseDONE {
 		t.Fatalf("close %v %+v", err, closed)
 	}
@@ -108,7 +118,7 @@ func TestCheckMustTickBeforeClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, tok, "markedo", "meta", task.Handle, "nope"); err == nil {
+	if _, err := a.Close(ctx, tok, "markedo", "meta", task.Handle, "nope", ""); err == nil {
 		t.Fatal("close with unticked checks")
 	}
 	ticked, err := a.SetCheck(ctx, tok, "markedo", "meta", task.Handle, 1, "", true)
@@ -118,7 +128,7 @@ func TestCheckMustTickBeforeClose(t *testing.T) {
 	if _, err := a.SetCheck(ctx, tok, "markedo", "meta", task.Handle, 0, "HTML", true); err != nil {
 		t.Fatal(err)
 	}
-	closed, err := a.Close(ctx, tok, "markedo", "meta", task.Handle, "both ticked")
+	closed, err := a.Close(ctx, tok, "markedo", "meta", task.Handle, "both ticked", "")
 	if err != nil || closed.Phase != types.PhaseDONE {
 		t.Fatalf("close %v %+v", err, closed)
 	}
@@ -247,5 +257,76 @@ func TestCreateLedgerMintsProjectTokenForOwnerAdmin(t *testing.T) {
 	}
 	if issued, err := a.MintProjectWrite(ctx, tok, "markedo", l.Slug, ""); err != nil || issued != nil {
 		t.Fatalf("empty actor %v %v", issued, err)
+	}
+}
+
+func TestClaimIDIsolatesSameActorSessions(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{Title: "Lease", IdempotencyKey: "clm-1"}); err != nil {
+		t.Fatal(err)
+	}
+	held, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Minute})
+	if err != nil || !strings.HasPrefix(held.ClaimID, "clm_") {
+		t.Fatalf("claim %v %+v", err, held)
+	}
+	if _, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Minute}); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("re-claim without id: %v", err)
+	}
+	again, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Minute, ClaimID: held.ClaimID})
+	if err != nil || again.ClaimID != held.ClaimID {
+		t.Fatalf("re-claim with id: %v %q", err, again.ClaimID)
+	}
+	if _, err := a.Heartbeat(ctx, tok, "markedo", "meta", "T-001", 0, ""); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("heartbeat without id: %v", err)
+	}
+	beat, err := a.Heartbeat(ctx, tok, "markedo", "meta", "T-001", 0, held.ClaimID)
+	if err != nil || beat.ClaimID != held.ClaimID {
+		t.Fatalf("heartbeat %v %q", err, beat.ClaimID)
+	}
+	if _, err := a.SetPhase(ctx, tok, "markedo", "meta", "T-001", app.PhaseInput{Phase: "NEXT", Reason: "later"}); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("phase without id: %v", err)
+	}
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "nope", ""); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("close without id: %v", err)
+	}
+	if _, err := a.AddNote(ctx, tok, "markedo", "meta", "T-001", "open notes"); err != nil {
+		t.Fatalf("note without id: %v", err)
+	}
+	got, err := a.Get(ctx, tok, "markedo", "meta", "T-001")
+	if err != nil || got.ClaimID != "" || got.ClaimSecretHash == "" {
+		t.Fatalf("get must hide plaintext and keep hash: %+v %v", got, err)
+	}
+
+	other, err := a.CreateToken(ctx, tok, "markedo", app.CreateTokenInput{Actor: "batty", Role: "write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batty, err := a.Auth(ctx, other.Plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stolen, err := a.Claim(ctx, batty, "markedo", "meta", "T-001", app.ClaimInput{Steal: true, Reason: "take it"})
+	if err != nil || stolen.ClaimID == "" || stolen.ClaimID == held.ClaimID {
+		t.Fatalf("steal %v %q", err, stolen.ClaimID)
+	}
+	if _, err := a.Heartbeat(ctx, tok, "markedo", "meta", "T-001", 0, held.ClaimID); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("old id after steal: %v", err)
+	}
+	if _, err := a.Release(ctx, batty, "markedo", "meta", "T-001", stolen.ClaimID); err != nil {
+		t.Fatal(err)
+	}
+
+	legacy, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := ""
+	if _, err := a.Store.Mutate(ctx, legacy.ID, tok.Actor, "claim", map[string]string{}, store.MutateTask{ClaimSecretHash: &empty}); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Minute})
+	if err != nil || upgraded.ClaimID == "" {
+		t.Fatalf("legacy re-claim %v %q", err, upgraded.ClaimID)
 	}
 }

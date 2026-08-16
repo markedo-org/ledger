@@ -63,11 +63,16 @@ fi
 auth=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
 curl -sf "${auth[@]}" -d '{"title":"Smoke HTTP","idempotency_key":"smoke-http-1"}' \
   "$BASE/v1/smoke/inbox/tasks" >/dev/null
-curl -sf "${auth[@]}" -d '{}' \
-  "$BASE/v1/smoke/inbox/tasks/T-001/claim" >/dev/null
+claimed="$(curl -sf "${auth[@]}" -d '{}' \
+  "$BASE/v1/smoke/inbox/tasks/T-001/claim")"
+claim_id="$(printf '%s' "$claimed" | sed -n 's/.*"claim_id":"\([^"]*\)".*/\1/p')"
+if [[ -z "$claim_id" ]]; then
+  echo "smoke: HTTP claim missing claim_id: $claimed" >&2
+  exit 1
+fi
 curl -sf "${auth[@]}" -d '{"body":"smoke note"}' \
   "$BASE/v1/smoke/inbox/tasks/T-001/notes" >/dev/null
-closed="$(curl -sf "${auth[@]}" -d '{"evidence":"scripts/smoke.sh"}' \
+closed="$(curl -sf "${auth[@]}" -d "{\"evidence\":\"scripts/smoke.sh\",\"claim_id\":\"${claim_id}\"}" \
   "$BASE/v1/smoke/inbox/tasks/T-001/close")"
 echo "$closed" | grep -q '"phase":"DONE"' || {
   echo "smoke: HTTP close did not return DONE: $closed" >&2

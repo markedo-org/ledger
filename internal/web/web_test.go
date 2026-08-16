@@ -161,7 +161,7 @@ func TestHTMLArchiveAndHTTPDone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(context.Background(), auth, "markedo", "meta", "T-001", "closed"); err != nil {
+	if _, err := a.Close(context.Background(), auth, "markedo", "meta", "T-001", "closed", ""); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := a.Ledger(context.Background(), auth, "markedo", "meta")

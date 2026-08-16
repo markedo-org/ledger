@@ -190,11 +190,14 @@ h2.phase:first-of-type { border-top: 0; padding-top: 0; }
 }
 .register a.row {
   display: grid;
-  grid-template-columns: 5.5rem 1fr;
+  grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr);
   gap: 0.65rem 1rem;
   padding: 0.55rem 0.2rem 0.55rem 0;
   text-decoration: none;
   color: inherit;
+}
+.register a.row.single {
+  grid-template-columns: minmax(0, 1fr);
 }
 .register li.claimed a.row { padding-left: 0.65rem; }
 .register a.row:hover {
@@ -208,6 +211,7 @@ h2.phase:first-of-type { border-top: 0; padding-top: 0; }
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   padding-top: 0.15rem;
+  overflow-wrap: anywhere;
 }
 .register li.claimed .handle { color: var(--claim); }
 .row-main { min-width: 0; }
@@ -399,7 +403,8 @@ form.signin button:hover {
 :focus-visible { outline: 2px solid var(--claim); outline-offset: 2px; }
 
 @media (max-width: 40rem) {
-  .register a.row { grid-template-columns: 1fr; gap: 0.15rem; }
+  .register a.row,
+  .register a.row.single { grid-template-columns: 1fr; gap: 0.15rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

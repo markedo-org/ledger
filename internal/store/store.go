@@ -67,6 +67,7 @@ func migrate(db *sql.DB) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email) WHERE email != ''`,
 		`ALTER TABLE ledgers ADD COLUMN archive_done_after_days INTEGER`,
 		`ALTER TABLE ledgers ADD COLUMN purge_done_after_days INTEGER`,
+		`ALTER TABLE tasks ADD COLUMN claim_id_hash TEXT`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("migrate: %s: %w", stmt, err)
@@ -366,14 +367,14 @@ func (s *Store) ListTasks(ctx context.Context, ledgerID string, q TaskList) ([]t
 func getTaskTx(ctx context.Context, tx *sql.Tx, id string) (types.Task, error) {
 	var t types.Task
 	var phase, size string
-	var verified, claimedUntil, closed, claimedBy, evidence sql.NullString
+	var verified, claimedUntil, closed, claimedBy, evidence, claimHash sql.NullString
 	var since, created, updated string
 	var signoff, third, decision, gateTime int
 	err := tx.QueryRowContext(ctx, `SELECT id, ledger_id, series_id, n, handle, title, body, phase, size, rank, version, pushed,
-		verified_at, since, ref, gate_signoff, gate_third, gate_decision, gate_time, claimed_by, claimed_until, evidence, closed_at, created_at, updated_at
+		verified_at, since, ref, gate_signoff, gate_third, gate_decision, gate_time, claimed_by, claimed_until, claim_id_hash, evidence, closed_at, created_at, updated_at
 		FROM tasks WHERE id = ?`, id).Scan(
 		&t.ID, &t.LedgerID, &t.SeriesID, &t.N, &t.Handle, &t.Title, &t.Body, &phase, &size, &t.Rank, &t.Version, &t.Pushed,
-		&verified, &since, &t.Ref, &signoff, &third, &decision, &gateTime, &claimedBy, &claimedUntil, &evidence, &closed, &created, &updated)
+		&verified, &since, &t.Ref, &signoff, &third, &decision, &gateTime, &claimedBy, &claimedUntil, &claimHash, &evidence, &closed, &created, &updated)
 	if err != nil {
 		return t, err
 	}
@@ -388,6 +389,9 @@ func getTaskTx(ctx context.Context, tx *sql.Tx, id string) (types.Task, error) {
 	t.ClosedAt = parseTimePtr(closed)
 	if claimedBy.Valid {
 		t.ClaimedBy = claimedBy.String
+	}
+	if claimHash.Valid {
+		t.ClaimSecretHash = claimHash.String
 	}
 	if evidence.Valid {
 		t.Evidence = evidence.String
@@ -442,16 +446,17 @@ func getTaskTx(ctx context.Context, tx *sql.Tx, id string) (types.Task, error) {
 }
 
 type MutateTask struct {
-	Phase        *types.Phase
-	Pushed       *int
-	Rank         *int
-	ClaimedBy    *string
-	ClaimedUntil *time.Time
-	ClearClaim   bool
-	Evidence     *string
-	ClosedAt     *time.Time
-	VerifiedAt   *time.Time
-	Version      int
+	Phase           *types.Phase
+	Pushed          *int
+	Rank            *int
+	ClaimedBy       *string
+	ClaimedUntil    *time.Time
+	ClaimSecretHash *string
+	ClearClaim      bool
+	Evidence        *string
+	ClosedAt        *time.Time
+	VerifiedAt      *time.Time
+	Version         int
 }
 
 func (s *Store) Mutate(ctx context.Context, taskID, actor, kind string, payload any, m MutateTask) (types.Task, error) {
@@ -481,7 +486,7 @@ func (s *Store) Mutate(ctx context.Context, taskID, actor, kind string, payload 
 			args = append(args, *m.Rank)
 		}
 		if m.ClearClaim {
-			sets = append(sets, "claimed_by = NULL", "claimed_until = NULL")
+			sets = append(sets, "claimed_by = NULL", "claimed_until = NULL", "claim_id_hash = NULL")
 		} else {
 			if m.ClaimedBy != nil {
 				sets = append(sets, "claimed_by = ?")
@@ -490,6 +495,10 @@ func (s *Store) Mutate(ctx context.Context, taskID, actor, kind string, payload 
 			if m.ClaimedUntil != nil {
 				sets = append(sets, "claimed_until = ?")
 				args = append(args, fmtTime(*m.ClaimedUntil))
+			}
+			if m.ClaimSecretHash != nil {
+				sets = append(sets, "claim_id_hash = ?")
+				args = append(args, *m.ClaimSecretHash)
 			}
 		}
 		if m.Evidence != nil {
@@ -609,7 +618,7 @@ func (s *Store) Reap(ctx context.Context) (int, error) {
 			return err
 		}
 		for _, r := range expired {
-			if _, err := tx.ExecContext(ctx, `UPDATE tasks SET claimed_by = NULL, claimed_until = NULL, version = version + 1, updated_at = ? WHERE id = ?`,
+			if _, err := tx.ExecContext(ctx, `UPDATE tasks SET claimed_by = NULL, claimed_until = NULL, claim_id_hash = NULL, version = version + 1, updated_at = ? WHERE id = ?`,
 				fmtTime(t), r.id); err != nil {
 				return err
 			}

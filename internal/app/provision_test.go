@@ -54,7 +54,8 @@ func TestOperatorProvisionAndFreeze(t *testing.T) {
 	if _, _, err := a.Create(ctx, ada, "acme", "extra", app.CreateInput{Title: "On extra", IdempotencyKey: "e0"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Claim(ctx, ada, "acme", "extra", "T-001", app.ClaimInput{}); err != nil {
+	held, err := a.Claim(ctx, ada, "acme", "extra", "T-001", app.ClaimInput{})
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,10 +65,10 @@ func TestOperatorProvisionAndFreeze(t *testing.T) {
 	if _, _, err := a.Create(ctx, ada, "acme", "extra", app.CreateInput{Title: "Nope", IdempotencyKey: "x1"}); !errors.Is(err, app.ErrPolicy) {
 		t.Fatalf("frozen write %v", err)
 	}
-	if _, err := a.Heartbeat(ctx, ada, "acme", "extra", "T-001", 0); !errors.Is(err, app.ErrPolicy) {
+	if _, err := a.Heartbeat(ctx, ada, "acme", "extra", "T-001", 0, held.ClaimID); !errors.Is(err, app.ErrPolicy) {
 		t.Fatalf("frozen heartbeat %v", err)
 	}
-	if _, err := a.Release(ctx, ada, "acme", "extra", "T-001"); err != nil {
+	if _, err := a.Release(ctx, ada, "acme", "extra", "T-001", held.ClaimID); err != nil {
 		t.Fatalf("release on frozen %v", err)
 	}
 	if _, _, err := a.Create(ctx, ada, "acme", "inbox", app.CreateInput{Title: "Oldest stays", IdempotencyKey: "i1"}); err != nil {

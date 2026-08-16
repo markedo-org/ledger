@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   gate_time INTEGER NOT NULL DEFAULT 0,
   claimed_by TEXT,
   claimed_until TEXT,
+  claim_id_hash TEXT,
   evidence TEXT,
   closed_at TEXT,
   created_at TEXT NOT NULL,

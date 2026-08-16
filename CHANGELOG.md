@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.5
+
+Claim returns a `claim_id`. The same actor in another session cannot
+refresh, heartbeat, release, close, or phase that live lease without it.
+`get_task`, `list_tasks`, and HTML omit it. Steal from another actor
+mints a new id. Leases minted before this release keep the old
+same-actor behaviour until they expire.
+
+## 0.15.4
+
+Owner page prints a ledger slug once when the title matches the slug, so a
+long name no longer reads as `abusemanagerabusemanager`. Optional
+`LEDGER_SITE_URL` adds a billing link for unused capacity.
+
 ## 0.15.3
 
 Creating an owner with a first ledger mints two tokens: owner admin, and a

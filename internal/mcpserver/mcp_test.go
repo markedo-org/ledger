@@ -413,7 +413,7 @@ func TestMCPListDoneOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Close(ctx, auth, "acme", "inbox", "T-001", "closed"); err != nil {
+	if _, err := a.Close(ctx, auth, "acme", "inbox", "T-001", "closed", ""); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := a.Ledger(ctx, auth, "acme", "inbox")

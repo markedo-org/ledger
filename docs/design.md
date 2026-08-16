@@ -38,7 +38,10 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
   Numbers never reused. Idempotency key on create.
 - Intent-shaped operations. Append-only notes. No `PUT` of a whole task.
 - Claims are leases (default 30 minutes, agent may request longer). Reaper.
-  Pull (`next`), do not push. `steal` is logged.
+  Pull (`next`), do not push. `steal` is logged. A live lease also has a
+  `claim_id` (capability for that chat). Same-actor refresh, heartbeat,
+  release, close, and phase need it. Notes stay open. HTML and get/list
+  never show it.
 - Event log from the first write. Materialised task table is the truth.
 - Schema copied from Markedo `TASKS.md`: phases NOW/NEXT/LATER/GATED/PARKED/DONE,
   gates as flags, size S|M|L, explicit rank, sub-checkboxes as child items

@@ -18,12 +18,13 @@ import (
 )
 
 type Server struct {
-	App    *app.App
-	Auth   AuthConfig
-	GitHub GitHub
-	Root   RootConfig
-	tmpl   *template.Template
-	static fs.FS
+	App     *app.App
+	Auth    AuthConfig
+	GitHub  GitHub
+	Root    RootConfig
+	SiteURL string
+	tmpl    *template.Template
+	static  fs.FS
 }
 
 func New(a *app.App) (*Server, error) {
@@ -46,8 +47,9 @@ func New(a *app.App) (*Server, error) {
 // Streamable HTTP is not wrapped by Gin.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcpserver.Handler(s.App))
-	mux.Handle("/mcp/", mcpserver.Handler(s.App))
+	mcpH := mcpserver.Handler(s.App)
+	mux.Handle("/mcp", mcpH)
+	mux.Handle("/mcp/", mcpH)
 	mux.Handle("/", s.Engine())
 	return mux
 }
@@ -186,6 +188,9 @@ func taskJSON(t types.Task) gin.H {
 	}
 	if t.ClosedAt != nil {
 		h["closed_at"] = t.ClosedAt.UTC().Format(time.RFC3339)
+	}
+	if t.ClaimID != "" {
+		h["claim_id"] = t.ClaimID
 	}
 	return h
 }
@@ -364,6 +369,7 @@ func (s *Server) claim(c *gin.Context) {
 		TTLSeconds int    `json:"ttl_seconds"`
 		Steal      bool   `json:"steal"`
 		Reason     string `json:"reason"`
+		ClaimID    string `json:"claim_id"`
 	}
 	_ = c.ShouldBindJSON(&in)
 	var ttl time.Duration
@@ -371,7 +377,7 @@ func (s *Server) claim(c *gin.Context) {
 		ttl = time.Duration(in.TTLSeconds) * time.Second
 	}
 	t, err := s.App.Claim(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), app.ClaimInput{
-		TTL: ttl, Steal: in.Steal, Reason: in.Reason,
+		TTL: ttl, Steal: in.Steal, Reason: in.Reason, ClaimID: in.ClaimID,
 	})
 	if err != nil {
 		s.fail(c, err)
@@ -382,14 +388,15 @@ func (s *Server) claim(c *gin.Context) {
 
 func (s *Server) heartbeat(c *gin.Context) {
 	var in struct {
-		TTLSeconds int `json:"ttl_seconds"`
+		TTLSeconds int    `json:"ttl_seconds"`
+		ClaimID    string `json:"claim_id"`
 	}
 	_ = c.ShouldBindJSON(&in)
 	var ttl time.Duration
 	if in.TTLSeconds > 0 {
 		ttl = time.Duration(in.TTLSeconds) * time.Second
 	}
-	t, err := s.App.Heartbeat(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), ttl)
+	t, err := s.App.Heartbeat(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), ttl, in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -398,7 +405,11 @@ func (s *Server) heartbeat(c *gin.Context) {
 }
 
 func (s *Server) release(c *gin.Context) {
-	t, err := s.App.Release(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"))
+	var in struct {
+		ClaimID string `json:"claim_id"`
+	}
+	_ = c.ShouldBindJSON(&in)
+	t, err := s.App.Release(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -408,15 +419,18 @@ func (s *Server) release(c *gin.Context) {
 
 func (s *Server) phase(c *gin.Context) {
 	var in struct {
-		Phase  string `json:"phase"`
-		Reason string `json:"reason"`
-		Force  bool   `json:"force"`
+		Phase   string `json:"phase"`
+		Reason  string `json:"reason"`
+		Force   bool   `json:"force"`
+		ClaimID string `json:"claim_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
 		return
 	}
-	t, err := s.App.SetPhase(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), app.PhaseInput(in))
+	t, err := s.App.SetPhase(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), app.PhaseInput{
+		Phase: in.Phase, Reason: in.Reason, Force: in.Force, ClaimID: in.ClaimID,
+	})
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -465,12 +479,13 @@ func (s *Server) check(c *gin.Context) {
 func (s *Server) close(c *gin.Context) {
 	var in struct {
 		Evidence string `json:"evidence"`
+		ClaimID  string `json:"claim_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
 		return
 	}
-	t, err := s.App.Close(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.Evidence)
+	t, err := s.App.Close(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.Evidence, in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -528,7 +543,7 @@ func (s *Server) htmlOwners(c *gin.Context) {
 
 func (s *Server) htmlOwner(c *gin.Context) {
 	owner := c.Param("owner")
-	ledgers, err := s.App.ListLedgersPublic(c.Request.Context(), owner)
+	o, ledgers, err := s.App.PublicOwner(c.Request.Context(), owner)
 	if err != nil {
 		s.htmlErr(c, err)
 		return
@@ -542,12 +557,20 @@ func (s *Server) htmlOwner(c *gin.Context) {
 		}
 		ledgers = filtered
 	}
+	used := len(ledgers)
+	unused := 0
+	if o.MaxLedgers > 0 && o.MaxLedgers > used {
+		unused = o.MaxLedgers - used
+	}
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(c.Writer, "owner", s.page(c, gin.H{
-		"Title":   owner,
-		"Owner":   owner,
-		"Ledgers": ledgers,
+		"Title":      owner,
+		"Owner":      owner,
+		"Ledgers":    ledgers,
+		"MaxLedgers": o.MaxLedgers,
+		"Used":       used,
+		"Unused":     unused,
 	})); err != nil {
 		log.Printf("template: %v", err)
 	}

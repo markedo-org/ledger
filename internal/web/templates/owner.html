@@ -3,18 +3,26 @@
 <header class="mast">
   <h1 class="brand">{{template "mark"}}{{.Owner}}</h1>
   <div class="meta">task-ledger · owner {{template "appearance"}}</div>
-  <p>Ledgers under this owner. The write path is the API.</p>
+  <p>Ledgers under this owner. The write path is the API.{{if .SiteURL}} Create another from <a href="{{.SiteURL}}/billing">billing</a> when you have unused capacity.{{end}}</p>
+  {{if .MaxLedgers}}<p class="lede">Cap {{.MaxLedgers}}. {{.Used}} in use{{if .Unused}}, {{.Unused}} unused.{{else}}.{{end}}</p>{{end}}
 </header>
 {{if .Ledgers}}
 <ol class="register">
   {{range .Ledgers}}
   <li class="{{if .Frozen}}frozen{{end}}">
-    <a class="row" href="/{{$.Owner}}/{{.Slug}}">
+    <a class="row{{if or (not .Title) (eq .Title .Slug)}} single{{end}}" href="/{{$.Owner}}/{{.Slug}}">
+      {{if and .Title (ne .Title .Slug)}}
       <span class="handle">{{.Slug}}</span>
       <span class="row-main">
-        <span class="title">{{if .Title}}{{.Title}}{{else}}{{.Slug}}{{end}}</span>
+        <span class="title">{{.Title}}</span>
         {{if .Frozen}}<span class="row-meta">read-only</span>{{end}}
       </span>
+      {{else}}
+      <span class="row-main">
+        <span class="title">{{.Slug}}</span>
+        {{if .Frozen}}<span class="row-meta">read-only</span>{{end}}
+      </span>
+      {{end}}
     </a>
   </li>
   {{end}}

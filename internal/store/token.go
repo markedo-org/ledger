@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -31,4 +32,20 @@ func TokenPreview(plain string) string {
 		return "lgr_…"
 	}
 	return fmt.Sprintf("%s…%s", plain[:8], plain[len(plain)-4:])
+}
+
+func NewClaimID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return "clm_" + hex.EncodeToString(b[:]), nil
+}
+
+func ClaimIDOK(hash, plain string) bool {
+	if hash == "" || plain == "" {
+		return false
+	}
+	got := HashToken(plain)
+	return subtle.ConstantTimeCompare([]byte(hash), []byte(got)) == 1
 }

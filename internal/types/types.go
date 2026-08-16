@@ -103,34 +103,36 @@ type Token struct {
 func (t Token) IsOperator() bool { return t.Role == RoleOperator }
 
 type Task struct {
-	ID           string
-	LedgerID     string
-	SeriesID     string
-	N            int
-	Handle       string
-	Title        string
-	Body         string
-	Phase        Phase
-	Size         Size
-	Rank         int
-	Version      int
-	Pushed       int
-	VerifiedAt   *time.Time
-	Since        time.Time
-	Ref          string
-	GateSignoff  bool
-	GateThird    bool
-	GateDecision bool
-	GateTime     bool
-	ClaimedBy    string
-	ClaimedUntil *time.Time
-	Evidence     string
-	ClosedAt     *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Notes        []Note
-	Checks       []Check
-	DependsOn    []string
+	ID              string
+	LedgerID        string
+	SeriesID        string
+	N               int
+	Handle          string
+	Title           string
+	Body            string
+	Phase           Phase
+	Size            Size
+	Rank            int
+	Version         int
+	Pushed          int
+	VerifiedAt      *time.Time
+	Since           time.Time
+	Ref             string
+	GateSignoff     bool
+	GateThird       bool
+	GateDecision    bool
+	GateTime        bool
+	ClaimedBy       string
+	ClaimedUntil    *time.Time
+	ClaimSecretHash string // stored hash; never shown
+	ClaimID         string // plaintext, only on claim/heartbeat responses
+	Evidence        string
+	ClosedAt        *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Notes           []Note
+	Checks          []Check
+	DependsOn       []string
 }
 
 type Note struct {

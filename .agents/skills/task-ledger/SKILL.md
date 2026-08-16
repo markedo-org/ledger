@@ -59,9 +59,23 @@ Do not treat it as the write path once this server is in use. Do not edit a
 file the server generated (`/{owner}/{ledger}.md`). Until the humans migrate,
 ask which write path they mean.
 
+## Identity
+
+The bearer token is the actor. Do not send an impersonation header or an
+`actor=` field. Two tokens with the same actor name still look like one
+agent on the board. Give each seat its own write token.
+
+Cursor chats in one window share one MCP process, one session, and one
+token. Extra servers in `.cursor/mcp.json` do not isolate chats.
+Isolation there is `claim_id` from `claim_task` / `next_task`, kept in
+that chat only.
+
 ## Rules
 
-1. Claim before you work. Heartbeat if you will run past the lease. Pass
+1. Claim before you work. Keep `claim_id` from `claim_task` or
+   `next_task` in this chat. Pass it on heartbeat, re-claim, release,
+   close, and phase while the lease is live. Do not put it in a note or
+   share it. Heartbeat if you will run past the lease. Pass
    `ttl_seconds` when you already know it will be long (max 24h, default 30m).
 2. Intent-shaped operations only. No whole-object PUT.
 3. Actor is the token, not a prefix. Series `T-` is a workstream.

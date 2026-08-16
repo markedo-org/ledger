@@ -77,7 +77,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.listTasks)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_task",
-		Description: "Get one task by handle (T-001), including body, notes, checks, and claim state. Use this before acting. list_tasks is only an index.",
+		Description: "Get one task by handle (T-001), including body, notes, checks, and claim state. Does not return claim_id. Use this before acting. list_tasks is only an index.",
 	}, h.getTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_task",
@@ -85,11 +85,11 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.createTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "claim_task",
-		Description: "Claim a task with a lease (default 30 minutes). Heartbeat to extend. steal=true with a reason takes a live claim from another actor.",
+		Description: "Claim a task with a lease (default 30 minutes). Returns claim_id once. Keep it in this chat and pass it on heartbeat, re-claim, release, close, and phase while the lease is live. steal=true with a reason takes a live claim from another actor and issues a new claim_id.",
 	}, h.claimTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "next_task",
-		Description: "Atomically claim the next eligible NOW task in the series. Prefer this over listing then claiming.",
+		Description: "Atomically claim the next eligible NOW task in the series. Returns claim_id once. Keep it in this chat. Prefer this over listing then claiming.",
 	}, h.nextTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "add_note",
@@ -101,11 +101,11 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.setCheck)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_phase",
-		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. Closing is close_task, not this.",
+		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. Closing is close_task, not this. Pass claim_id while a lease is live.",
 	}, h.setPhase)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "close_task",
-		Description: "Close a task. Evidence is required (commit, query result, or observed behaviour). All checks must be ticked.",
+		Description: "Close a task. Evidence is required (commit, query result, or observed behaviour). All checks must be ticked. Pass claim_id while a lease is live.",
 	}, h.closeTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "verify_task",
@@ -113,11 +113,11 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.verify)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "heartbeat_task",
-		Description: "Extend the current actor's lease on a claimed task.",
+		Description: "Extend the current actor's lease. Pass claim_id from claim_task or next_task.",
 	}, h.heartbeat)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "release_task",
-		Description: "Drop the current actor's claim so another agent can take the task.",
+		Description: "Drop this chat's claim so another agent can take the task. Pass claim_id. Admin or operator can release another actor without it.",
 	}, h.release)
 	s.AddResource(&mcp.Resource{
 		URI:         "ledger://live",
@@ -414,6 +414,7 @@ type claimIn struct {
 	TTLSeconds int    `json:"ttl_seconds,omitempty" jsonschema:"Lease length in seconds. Default 1800, max 86400."`
 	Steal      bool   `json:"steal,omitempty" jsonschema:"Take a live claim from another actor. Requires reason."`
 	Reason     string `json:"reason,omitempty" jsonschema:"Required when steal is true"`
+	ClaimID    string `json:"claim_id,omitempty" jsonschema:"Required to refresh your own live lease from this chat. From claim_task or next_task."`
 }
 
 func (h *host) claimTask(ctx context.Context, _ *mcp.CallToolRequest, in claimIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -425,7 +426,7 @@ func (h *host) claimTask(ctx context.Context, _ *mcp.CallToolRequest, in claimIn
 	if in.TTLSeconds > 0 {
 		ttl = time.Duration(in.TTLSeconds) * time.Second
 	}
-	t, err := h.app.Claim(ctx, h.tok, owner, ledger, in.Handle, app.ClaimInput{TTL: ttl, Steal: in.Steal, Reason: in.Reason})
+	t, err := h.app.Claim(ctx, h.tok, owner, ledger, in.Handle, app.ClaimInput{TTL: ttl, Steal: in.Steal, Reason: in.Reason, ClaimID: in.ClaimID})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -500,12 +501,13 @@ func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn)
 }
 
 type phaseIn struct {
-	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
-	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
-	Handle string `json:"handle" jsonschema:"Task handle, for example T-001"`
-	Phase  string `json:"phase" jsonschema:"NOW, NEXT, LATER, GATED, or PARKED"`
-	Reason string `json:"reason,omitempty" jsonschema:"Required when moving to a later phase"`
-	Force  bool   `json:"force,omitempty" jsonschema:"Override the fourth-deferral policy block."`
+	Owner   string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger  string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
+	Handle  string `json:"handle" jsonschema:"Task handle, for example T-001"`
+	Phase   string `json:"phase" jsonschema:"NOW, NEXT, LATER, GATED, or PARKED"`
+	Reason  string `json:"reason,omitempty" jsonschema:"Required when moving to a later phase"`
+	Force   bool   `json:"force,omitempty" jsonschema:"Override the fourth-deferral policy block."`
+	ClaimID string `json:"claim_id,omitempty" jsonschema:"Required while a lease is live. From claim_task or next_task."`
 }
 
 func (h *host) setPhase(ctx context.Context, _ *mcp.CallToolRequest, in phaseIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -513,7 +515,7 @@ func (h *host) setPhase(ctx context.Context, _ *mcp.CallToolRequest, in phaseIn)
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.SetPhase(ctx, h.tok, owner, ledger, in.Handle, app.PhaseInput{Phase: in.Phase, Reason: in.Reason, Force: in.Force})
+	t, err := h.app.SetPhase(ctx, h.tok, owner, ledger, in.Handle, app.PhaseInput{Phase: in.Phase, Reason: in.Reason, Force: in.Force, ClaimID: in.ClaimID})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -525,6 +527,7 @@ type closeIn struct {
 	Ledger   string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger."`
 	Handle   string `json:"handle" jsonschema:"Task handle, for example T-001"`
 	Evidence string `json:"evidence" jsonschema:"Commit, query result, or observed behaviour. Required."`
+	ClaimID  string `json:"claim_id,omitempty" jsonschema:"Required while a lease is live. From claim_task or next_task."`
 }
 
 func (h *host) closeTask(ctx context.Context, _ *mcp.CallToolRequest, in closeIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -532,7 +535,7 @@ func (h *host) closeTask(ctx context.Context, _ *mcp.CallToolRequest, in closeIn
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.Close(ctx, h.tok, owner, ledger, in.Handle, in.Evidence)
+	t, err := h.app.Close(ctx, h.tok, owner, ledger, in.Handle, in.Evidence, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -556,6 +559,7 @@ type handleIn struct {
 	Ledger     string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger."`
 	Handle     string `json:"handle" jsonschema:"Task handle, for example T-001"`
 	TTLSeconds int    `json:"ttl_seconds,omitempty" jsonschema:"New lease length in seconds for heartbeat"`
+	ClaimID    string `json:"claim_id,omitempty" jsonschema:"From claim_task or next_task. Required for this chat's live lease."`
 }
 
 func (h *host) heartbeat(ctx context.Context, _ *mcp.CallToolRequest, in handleIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -567,7 +571,7 @@ func (h *host) heartbeat(ctx context.Context, _ *mcp.CallToolRequest, in handleI
 	if in.TTLSeconds > 0 {
 		ttl = time.Duration(in.TTLSeconds) * time.Second
 	}
-	t, err := h.app.Heartbeat(ctx, h.tok, owner, ledger, in.Handle, ttl)
+	t, err := h.app.Heartbeat(ctx, h.tok, owner, ledger, in.Handle, ttl, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -579,7 +583,7 @@ func (h *host) release(ctx context.Context, _ *mcp.CallToolRequest, in handleIn)
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.Release(ctx, h.tok, owner, ledger, in.Handle)
+	t, err := h.app.Release(ctx, h.tok, owner, ledger, in.Handle, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -634,6 +638,9 @@ func taskMap(t types.Task) map[string]any {
 	}
 	if t.ClosedAt != nil {
 		m["closed_at"] = t.ClosedAt.UTC().Format(time.RFC3339)
+	}
+	if t.ClaimID != "" {
+		m["claim_id"] = t.ClaimID
 	}
 	return m
 }

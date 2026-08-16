@@ -211,9 +211,24 @@ func (a *App) GetPublic(ctx context.Context, owner, ledger, handle string) (type
 }
 
 type ClaimInput struct {
-	TTL    time.Duration
-	Steal  bool
-	Reason string
+	TTL     time.Duration
+	Steal   bool
+	Reason  string
+	ClaimID string
+}
+
+func leaseLive(t types.Task, now time.Time) bool {
+	return t.ClaimedBy != "" && t.ClaimedUntil != nil && t.ClaimedUntil.After(now)
+}
+
+func leaseHeldElsewhere(t types.Task, claimID string) error {
+	if t.ClaimSecretHash == "" {
+		return nil
+	}
+	if store.ClaimIDOK(t.ClaimSecretHash, claimID) {
+		return nil
+	}
+	return fmt.Errorf("%w: another session holds this lease", ErrConflict)
 }
 
 func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle string, in ClaimInput) (types.Task, error) {
@@ -232,7 +247,8 @@ func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle 
 		return t, fmt.Errorf("%w: lease longer than 24h", ErrInvalid)
 	}
 	now := time.Now().UTC()
-	live := t.ClaimedBy != "" && t.ClaimedUntil != nil && t.ClaimedUntil.After(now)
+	live := leaseLive(t, now)
+	steal := in.Steal && live && t.ClaimedBy != tok.Actor
 	if live && t.ClaimedBy != tok.Actor {
 		if !in.Steal {
 			return t, fmt.Errorf("%w: held by %s until %s", ErrConflict, t.ClaimedBy, t.ClaimedUntil.Format(time.RFC3339))
@@ -241,26 +257,47 @@ func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle 
 			return t, fmt.Errorf("%w: steal requires a reason", ErrInvalid)
 		}
 	}
+	if live && t.ClaimedBy == tok.Actor {
+		if err := leaseHeldElsewhere(t, in.ClaimID); err != nil {
+			return t, err
+		}
+	}
 	until := now.Add(ttl)
 	actor := tok.Actor
 	kind := "claim"
 	payload := map[string]any{"ttl_seconds": int(ttl.Seconds())}
-	if in.Steal && live && t.ClaimedBy != tok.Actor {
+	if steal {
 		kind = "steal"
 		payload["reason"] = in.Reason
 		payload["from"] = t.ClaimedBy
 	}
+	plain := in.ClaimID
+	var hash *string
+	mint := !live || steal || (live && t.ClaimSecretHash == "")
+	if mint {
+		plain, err = store.NewClaimID()
+		if err != nil {
+			return t, err
+		}
+		h := store.HashToken(plain)
+		hash = &h
+	}
 	out, err := a.Store.Mutate(ctx, t.ID, tok.Actor, kind, payload, store.MutateTask{
-		ClaimedBy:    &actor,
-		ClaimedUntil: &until,
+		ClaimedBy:       &actor,
+		ClaimedUntil:    &until,
+		ClaimSecretHash: hash,
 	})
 	if errors.Is(err, store.ErrConflict) {
 		return out, ErrConflict
 	}
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	out.ClaimID = plain
+	return out, nil
 }
 
-func (a *App) Heartbeat(ctx context.Context, tok types.Token, owner, ledger, handle string, ttl time.Duration) (types.Task, error) {
+func (a *App) Heartbeat(ctx context.Context, tok types.Token, owner, ledger, handle string, ttl time.Duration, claimID string) (types.Task, error) {
 	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
@@ -269,6 +306,9 @@ func (a *App) Heartbeat(ctx context.Context, tok types.Token, owner, ledger, han
 	if t.ClaimedBy != tok.Actor || t.ClaimedUntil == nil || !t.ClaimedUntil.After(now) {
 		return t, fmt.Errorf("%w: you do not hold this claim", ErrConflict)
 	}
+	if err := leaseHeldElsewhere(t, claimID); err != nil {
+		return t, err
+	}
 	if ttl <= 0 {
 		ttl = DefaultLease
 	}
@@ -276,26 +316,41 @@ func (a *App) Heartbeat(ctx context.Context, tok types.Token, owner, ledger, han
 		return t, fmt.Errorf("%w: lease longer than 24h", ErrInvalid)
 	}
 	until := now.Add(ttl)
-	return a.Store.Mutate(ctx, t.ID, tok.Actor, "heartbeat", map[string]any{"ttl_seconds": int(ttl.Seconds())}, store.MutateTask{
+	out, err := a.Store.Mutate(ctx, t.ID, tok.Actor, "heartbeat", map[string]any{"ttl_seconds": int(ttl.Seconds())}, store.MutateTask{
 		ClaimedUntil: &until,
 	})
+	if err != nil {
+		return out, err
+	}
+	if t.ClaimSecretHash != "" {
+		out.ClaimID = claimID
+	}
+	return out, nil
 }
 
-func (a *App) Release(ctx context.Context, tok types.Token, owner, ledger, handle string) (types.Task, error) {
+func (a *App) Release(ctx context.Context, tok types.Token, owner, ledger, handle, claimID string) (types.Task, error) {
 	t, err := a.Get(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
-	if t.ClaimedBy != "" && t.ClaimedBy != tok.Actor && tok.Role != types.RoleAdmin && !tok.IsOperator() {
+	now := time.Now().UTC()
+	live := leaseLive(t, now)
+	if live && t.ClaimedBy != tok.Actor && tok.Role != types.RoleAdmin && !tok.IsOperator() {
 		return t, fmt.Errorf("%w: held by %s", ErrConflict, t.ClaimedBy)
+	}
+	if live && t.ClaimedBy == tok.Actor {
+		if err := leaseHeldElsewhere(t, claimID); err != nil {
+			return t, err
+		}
 	}
 	return a.Store.Mutate(ctx, t.ID, tok.Actor, "release", map[string]string{}, store.MutateTask{ClearClaim: true})
 }
 
 type PhaseInput struct {
-	Phase  string
-	Reason string
-	Force  bool
+	Phase   string
+	Reason  string
+	Force   bool
+	ClaimID string
 }
 
 func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, handle string, in PhaseInput) (types.Task, error) {
@@ -309,6 +364,11 @@ func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, hand
 	}
 	if phase == t.Phase {
 		return t, nil
+	}
+	if leaseLive(t, time.Now().UTC()) {
+		if err := leaseHeldElsewhere(t, in.ClaimID); err != nil {
+			return t, err
+		}
 	}
 	pushed := t.Pushed
 	if phase.Rank() > t.Phase.Rank() && phase != types.PhaseDONE {
@@ -375,10 +435,15 @@ func (a *App) AddNote(ctx context.Context, tok types.Token, owner, ledger, handl
 	return a.Store.AddNote(ctx, t.ID, tok.Actor, body)
 }
 
-func (a *App) Close(ctx context.Context, tok types.Token, owner, ledger, handle, evidence string) (types.Task, error) {
+func (a *App) Close(ctx context.Context, tok types.Token, owner, ledger, handle, evidence, claimID string) (types.Task, error) {
 	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
+	}
+	if leaseLive(t, time.Now().UTC()) {
+		if err := leaseHeldElsewhere(t, claimID); err != nil {
+			return t, err
+		}
 	}
 	evidence = strings.TrimSpace(evidence)
 	if evidence == "" {
@@ -452,14 +517,20 @@ func (a *App) Reap(ctx context.Context) (int, error) {
 }
 
 func (a *App) ListLedgersPublic(ctx context.Context, ownerSlug string) ([]LedgerInfo, error) {
+	_, ledgers, err := a.PublicOwner(ctx, ownerSlug)
+	return ledgers, err
+}
+
+func (a *App) PublicOwner(ctx context.Context, ownerSlug string) (types.Owner, []LedgerInfo, error) {
 	o, err := a.Store.OwnerBySlug(ctx, ownerSlug)
 	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
+		return types.Owner{}, nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return types.Owner{}, nil, err
 	}
-	return a.ledgersWithFreeze(ctx, o)
+	infos, err := a.ledgersWithFreeze(ctx, o)
+	return o, infos, err
 }
 
 func (a *App) CreateSession(ctx context.Context, actor, githubID, login, ownerSlug, ledgerSlug, role string) (types.Session, string, error) {

@@ -79,6 +79,7 @@ func Serve(args []string, version, commit, date string) int {
 		log.Printf("operator token enabled")
 	}
 	a.PublicURL = strings.TrimSpace(os.Getenv("LEDGER_PUBLIC_URL"))
+	siteURL := strings.TrimSpace(os.Getenv("LEDGER_SITE_URL"))
 	if m := mail.FromEnv(); m != nil {
 		a.Mail = m
 	}
@@ -89,6 +90,10 @@ func Serve(args []string, version, commit, date string) int {
 	if err != nil {
 		log.Print(err)
 		return 1
+	}
+	srv.SiteURL = siteURL
+	if srv.SiteURL != "" {
+		log.Printf("site url %s", srv.SiteURL)
 	}
 	srv.Auth = authFromEnv()
 	if srv.Auth.Enabled() {
