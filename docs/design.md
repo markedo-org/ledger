@@ -13,7 +13,7 @@ and is not the series.
 ## Interfaces
 
 1. HTTP API (the system).
-2. HTML live view, read-only in v1.
+2. HTML live view. Boards stay read-only. Owner-admin sessions may edit ledger title and retention.
 3. Skill: conventions (do not edit the snapshot, claim before you work, bearer
    token, this repo's owner/ledger).
 4. MCP, Streamable HTTP at `/mcp`, over the same domain layer. Copy-paste attach

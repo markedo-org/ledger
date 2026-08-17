@@ -182,6 +182,14 @@ func (a *App) List(ctx context.Context, tok types.Token, owner, ledger string, q
 	return l, tasks, err
 }
 
+func (a *App) PublicLedger(ctx context.Context, owner, ledger string) (types.Ledger, error) {
+	l, err := a.Store.ResolveLedger(ctx, owner, ledger)
+	if err == sql.ErrNoRows {
+		return l, ErrNotFound
+	}
+	return l, err
+}
+
 // ListPublic is the HTML/markdown read path. Bind to localhost in v1.
 func (a *App) ListPublic(ctx context.Context, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, error) {
 	l, err := a.Store.ResolveLedger(ctx, owner, ledger)

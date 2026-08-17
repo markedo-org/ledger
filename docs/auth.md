@@ -74,7 +74,8 @@ Set `LEDGER_SECURE_COOKIES=1` behind HTTPS.
 | Path | What |
 | --- | --- |
 | `GET /owners` | Signed-in home: owners this session may see. GitHub allowlist sees all. |
-| `GET /:owner` | Ledgers under that owner. |
+| `GET /:owner` | Ledgers under that owner. Billing link only if `LEDGER_SITE_URL` is set. |
+| `GET /:owner/:ledger/settings` | Edit title and DONE retention. Owner-admin or operator session. |
 | `GET /:owner/:ledger` | Live task view. |
 | `GET /login` | Token form. Email form if SMTP is set. GitHub link if OAuth is configured. Sets a CSRF cookie. |
 | `POST /login` | Exchange a bearer token for a session cookie. Requires the CSRF field. |

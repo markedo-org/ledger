@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.6
+
+Owner page: capacity as in-use / cap / open, billing only when
+`LEDGER_SITE_URL` is set, and Settings to edit a ledger title (and
+retention). Same binary for self-host; omit the env var and there is no
+billing link. `PATCH /v1/:owner/ledgers/:ledger` accepts `title`.
+
 ## 0.15.5
 
 Claim returns a `claim_id`. The same actor in another session cannot

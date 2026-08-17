@@ -3,6 +3,8 @@
 <header class="mast">
   <h1 class="brand">{{template "mark"}}<a href="/{{.Owner}}/{{.Ledger}}">{{.Owner}}/{{.Ledger}}</a></h1>
   <div class="meta">task-ledger · live {{template "appearance"}}
+    · <a href="/{{.Owner}}">Owner</a>
+    {{if .CanManage}}· <a href="/{{.Owner}}/{{.Ledger}}/settings">Settings</a>{{end}}
     {{if .Archive}}
     · <a href="/{{.Owner}}/{{.Ledger}}">Board</a>
     {{else}}

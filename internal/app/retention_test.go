@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -176,6 +177,25 @@ func TestPurgeZeroNeverDeletes(t *testing.T) {
 	}
 	if _, err := a.Get(ctx, tok, "markedo", "meta", "T-001"); err != nil {
 		t.Fatal("purge 0 deleted a task")
+	}
+}
+
+func TestPatchLedgerTitle(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	title := "Abuse manager"
+	l, err := a.PatchLedger(ctx, tok, "markedo", "meta", &title, nil, nil)
+	if err != nil || l.Title != title {
+		t.Fatalf("title %#v %v", l.Title, err)
+	}
+	empty := ""
+	l, err = a.PatchLedger(ctx, tok, "markedo", "meta", &empty, nil, nil)
+	if err != nil || l.Title != "" {
+		t.Fatalf("clear %#v %v", l.Title, err)
+	}
+	long := strings.Repeat("x", app.MaxLedgerTitle+1)
+	if _, err := a.PatchLedger(ctx, tok, "markedo", "meta", &long, nil, nil); err == nil {
+		t.Fatal("overlong title")
 	}
 }
 

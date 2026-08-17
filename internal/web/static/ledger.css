@@ -77,6 +77,45 @@ header.mast p {
   color: var(--mute);
   font-size: 0.92rem;
 }
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+.tally strong {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.tally-of { color: var(--mute); }
+.tally-open { color: var(--claim); }
+.tally-full { color: var(--mute); letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.72rem; }
+.mast-actions {
+  margin-top: 0.15rem;
+}
+.mast-actions a { color: var(--claim); }
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+.tune {
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--mute);
+  padding: 0.35rem 0.15rem;
+  white-space: nowrap;
+}
+.tune:hover { color: var(--claim); }
+form.settings { max-width: 28rem; }
 .brand {
   display: flex;
   align-items: center;

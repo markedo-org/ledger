@@ -3,32 +3,51 @@
 <header class="mast">
   <h1 class="brand">{{template "mark"}}{{.Owner}}</h1>
   <div class="meta">task-ledger · owner {{template "appearance"}}</div>
-  <p>Ledgers under this owner. The write path is the API.{{if .SiteURL}} Create another from <a href="{{.SiteURL}}/billing">billing</a> when you have unused capacity.{{end}}</p>
-  {{if .MaxLedgers}}<p class="lede">Cap {{.MaxLedgers}}. {{.Used}} in use{{if .Unused}}, {{.Unused}} unused.{{else}}.{{end}}</p>{{end}}
+  <p>Boards under this owner. Open one to read the live list. Agents write through the API.</p>
+  {{if .MaxLedgers}}
+  <p class="tally" aria-label="Ledger capacity">
+    <span><strong>{{.Used}}</strong> of <strong>{{.MaxLedgers}}</strong> in use</span>
+    {{if .Unused}}
+    <span class="tally-open">{{.Unused}} open</span>
+    {{else}}
+    <span class="tally-full">full</span>
+    {{end}}
+  </p>
+  {{end}}
+  {{if .SiteURL}}
+  <p class="mast-actions">
+    {{if .Unused}}<a href="{{.SiteURL}}/billing">Create another ledger</a>{{else}}<a href="{{.SiteURL}}/billing">Add capacity</a>{{end}}
+  </p>
+  {{else if and .MaxLedgers (not .Unused)}}
+  <p class="mast-actions">This cap is full. Raise max_ledgers on the host to add another board.</p>
+  {{end}}
 </header>
 {{if .Ledgers}}
 <ol class="register">
   {{range .Ledgers}}
   <li class="{{if .Frozen}}frozen{{end}}">
-    <a class="row{{if or (not .Title) (eq .Title .Slug)}} single{{end}}" href="/{{$.Owner}}/{{.Slug}}">
-      {{if and .Title (ne .Title .Slug)}}
-      <span class="handle">{{.Slug}}</span>
-      <span class="row-main">
-        <span class="title">{{.Title}}</span>
-        {{if .Frozen}}<span class="row-meta">read-only</span>{{end}}
-      </span>
-      {{else}}
-      <span class="row-main">
-        <span class="title">{{.Slug}}</span>
-        {{if .Frozen}}<span class="row-meta">read-only</span>{{end}}
-      </span>
-      {{end}}
-    </a>
+    <div class="entry">
+      <a class="row{{if or (not .Title) (eq .Title .Slug)}} single{{end}}" href="/{{$.Owner}}/{{.Slug}}">
+        {{if and .Title (ne .Title .Slug)}}
+        <span class="handle">{{.Slug}}</span>
+        <span class="row-main">
+          <span class="title">{{.Title}}</span>
+          {{if .Frozen}}<span class="row-meta">read-only</span>{{end}}
+        </span>
+        {{else}}
+        <span class="row-main">
+          <span class="title">{{.Slug}}</span>
+          {{if or .Frozen $.CanManage (eq $.SessionLedger .Slug)}}<span class="row-meta">{{if .Frozen}}read-only{{if or $.CanManage (eq $.SessionLedger .Slug)}} · {{end}}{{end}}{{if or $.CanManage (eq $.SessionLedger .Slug)}}No title yet{{end}}</span>{{end}}
+        </span>
+        {{end}}
+      </a>
+      {{if or $.CanManage (eq $.SessionLedger .Slug)}}<a class="tune" href="/{{$.Owner}}/{{.Slug}}/settings">Settings</a>{{end}}
+    </div>
   </li>
   {{end}}
 </ol>
 {{else}}
-<p class="empty">None.</p>
+<p class="empty">No ledgers yet.{{if .SiteURL}} <a href="{{.SiteURL}}/billing">Create the first one</a>.{{end}}</p>
 {{end}}
 {{template "foot" .}}
 {{end}}

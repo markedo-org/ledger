@@ -55,6 +55,20 @@ func (s *Store) ListAllLedgers(ctx context.Context) ([]types.Ledger, error) {
 	return out, rows.Err()
 }
 
+func (s *Store) SetLedgerTitle(ctx context.Context, ledgerID, title string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `UPDATE ledgers SET title = ? WHERE id = ?`, title, ledgerID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (s *Store) SetLedgerRetention(ctx context.Context, ledgerID string, archive, purge *int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

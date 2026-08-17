@@ -100,6 +100,7 @@ func ledgerSet(args []string) int {
 	profile := fs.String("profile", "", "config profile (owner admin)")
 	owner := fs.String("owner", "", "owner slug (default from profile)")
 	slug := fs.String("slug", "", "ledger slug")
+	title := fs.String("title", "", "display title")
 	archive := fs.Int("archive-done-after-days", -1, "days before DONE leaves the default list (0 = never)")
 	purge := fs.Int("purge-done-after-days", -1, "days before DONE is deleted (0 = never)")
 	if err := fs.Parse(args); err != nil {
@@ -109,8 +110,14 @@ func ledgerSet(args []string) int {
 		fmt.Fprintln(os.Stderr, "ledger set: --slug is required")
 		return 2
 	}
-	if *archive < 0 && *purge < 0 {
-		fmt.Fprintln(os.Stderr, "ledger set: --archive-done-after-days or --purge-done-after-days is required")
+	setTitle := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "title" {
+			setTitle = true
+		}
+	})
+	if *archive < 0 && *purge < 0 && !setTitle {
+		fmt.Fprintln(os.Stderr, "ledger set: --title, --archive-done-after-days, or --purge-done-after-days is required")
 		return 2
 	}
 	c, err := newAPI(*profile)
@@ -126,6 +133,9 @@ func ledgerSet(args []string) int {
 		return 2
 	}
 	body := map[string]any{}
+	if setTitle {
+		body["title"] = *title
+	}
 	if *archive >= 0 {
 		body["archive_done_after_days"] = *archive
 	}

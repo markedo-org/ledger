@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,5 +213,117 @@ func TestHTMLArchiveAndHTTPDone(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("Closed")) {
 		t.Fatalf("get hidden DONE: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOwnerPageAndLedgerSettings(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	srv, err := web.New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/markedo", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("owner %d", rec.Code)
+	}
+	page := rec.Body.String()
+	if !strings.Contains(page, "of <strong>8</strong> in use") {
+		t.Fatalf("tally missing: %s", page)
+	}
+	if strings.Contains(page, "billing") || strings.Contains(page, "/settings") {
+		t.Fatal("public owner page must not show billing or settings")
+	}
+
+	srv.SiteURL = "https://www.task-ledger.com"
+	req = httptest.NewRequest(http.MethodGet, "/markedo", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `href="https://www.task-ledger.com/billing"`) {
+		t.Fatalf("billing missing: %s", rec.Body.String())
+	}
+
+	body := bytes.NewBufferString(`{"title":"The meta board"}`)
+	req = httptest.NewRequest(http.MethodPatch, "/v1/markedo/ledgers/meta", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("The meta board")) {
+		t.Fatalf("patch title %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/login", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	csrf := cookieVal(rec, "ledger_csrf")
+	form := strings.NewReader("token=" + tok + "&csrf=" + csrf)
+	req = httptest.NewRequest(http.MethodPost, "/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "ledger_csrf", Value: csrf})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	sess := cookieVal(rec, "ledger_session")
+	if sess == "" {
+		t.Fatal("missing session")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: sess})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `/markedo/meta/settings`) {
+		t.Fatalf("settings link missing: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta/settings", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: sess})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "The meta board") {
+		t.Fatalf("settings get %d %s", rec.Code, rec.Body.String())
+	}
+	csrf = cookieVal(rec, "ledger_csrf")
+	if csrf == "" {
+		t.Fatal("settings csrf")
+	}
+
+	vals := url.Values{
+		"csrf":                    {csrf},
+		"title":                   {"Abuse manager"},
+		"archive_done_after_days": {"7"},
+		"purge_done_after_days":   {"0"},
+	}
+	req = httptest.NewRequest(http.MethodPost, "/markedo/meta/settings", strings.NewReader(vals.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: sess})
+	req.AddCookie(&http.Cookie{Name: "ledger_csrf", Value: csrf})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("settings post %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: sess})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "Abuse manager") {
+		t.Fatalf("owner missing new title: %s", rec.Body.String())
 	}
 }

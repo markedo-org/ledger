@@ -104,6 +104,8 @@ func (s *Server) Engine() *gin.Engine {
 	r.POST("/admin", s.operatorGate, s.htmlAdminPost)
 	r.GET("/owners", s.htmlGate, s.htmlOwners)
 	r.GET("/:owner", s.htmlGate, s.htmlOwner)
+	r.GET("/:owner/:ledger/settings", s.htmlGate, s.htmlLedgerSettings)
+	r.POST("/:owner/:ledger/settings", s.htmlGate, s.htmlLedgerSettingsPost)
 	r.GET("/:owner/:ledger", s.htmlGate, s.htmlLedger)
 	r.GET("/:owner/:ledger/:handle", s.htmlGate, s.htmlTask)
 	return r
@@ -222,18 +224,15 @@ func (s *Server) ledgerJSON(l types.Ledger) gin.H {
 
 func (s *Server) patchLedger(c *gin.Context) {
 	var in struct {
-		ArchiveDoneAfterDays *int `json:"archive_done_after_days"`
-		PurgeDoneAfterDays   *int `json:"purge_done_after_days"`
+		Title                *string `json:"title"`
+		ArchiveDoneAfterDays *int    `json:"archive_done_after_days"`
+		PurgeDoneAfterDays   *int    `json:"purge_done_after_days"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
 		return
 	}
-	if in.ArchiveDoneAfterDays == nil && in.PurgeDoneAfterDays == nil {
-		s.fail(c, fmt.Errorf("%w: archive_done_after_days or purge_done_after_days required", app.ErrInvalid))
-		return
-	}
-	l, err := s.App.SetLedgerRetention(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), in.ArchiveDoneAfterDays, in.PurgeDoneAfterDays)
+	l, err := s.App.PatchLedger(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), in.Title, in.ArchiveDoneAfterDays, in.PurgeDoneAfterDays)
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -548,7 +547,9 @@ func (s *Server) htmlOwner(c *gin.Context) {
 		s.htmlErr(c, err)
 		return
 	}
-	if sess, ok := s.sessionFrom(c); ok && sess.LedgerSlug != "" {
+	used := len(ledgers)
+	sess, signedIn := s.sessionFrom(c)
+	if signedIn && sess.LedgerSlug != "" {
 		filtered := ledgers[:0]
 		for _, l := range ledgers {
 			if l.Slug == sess.LedgerSlug {
@@ -557,7 +558,6 @@ func (s *Server) htmlOwner(c *gin.Context) {
 		}
 		ledgers = filtered
 	}
-	used := len(ledgers)
 	unused := 0
 	if o.MaxLedgers > 0 && o.MaxLedgers > used {
 		unused = o.MaxLedgers - used
@@ -565,12 +565,14 @@ func (s *Server) htmlOwner(c *gin.Context) {
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(c.Writer, "owner", s.page(c, gin.H{
-		"Title":      owner,
-		"Owner":      owner,
-		"Ledgers":    ledgers,
-		"MaxLedgers": o.MaxLedgers,
-		"Used":       used,
-		"Unused":     unused,
+		"Title":         owner,
+		"Owner":         owner,
+		"Ledgers":       ledgers,
+		"MaxLedgers":    o.MaxLedgers,
+		"Used":          used,
+		"Unused":        unused,
+		"CanManage":     canManageLedger(sess, signedIn, owner, ""),
+		"SessionLedger": sess.LedgerSlug,
 	})); err != nil {
 		log.Printf("template: %v", err)
 	}
@@ -620,13 +622,15 @@ func (s *Server) htmlLedger(c *gin.Context) {
 	if archive {
 		title += " archive"
 	}
+	sess, signedIn := s.sessionFrom(c)
 	data := s.page(c, gin.H{
-		"Title":   title,
-		"Owner":   l.OwnerSlug,
-		"Ledger":  l.Slug,
-		"Frozen":  frozen,
-		"Archive": archive,
-		"Phases":  phases,
+		"Title":     title,
+		"Owner":     l.OwnerSlug,
+		"Ledger":    l.Slug,
+		"Frozen":    frozen,
+		"Archive":   archive,
+		"Phases":    phases,
+		"CanManage": canManageLedger(sess, signedIn, l.OwnerSlug, l.Slug),
 	})
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")

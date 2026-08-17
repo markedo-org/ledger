@@ -1,0 +1,24 @@
+{{define "settings"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand">{{template "mark"}}<a href="/{{.Owner}}">{{.Owner}}</a>/<a href="/{{.Owner}}/{{.Ledger}}">{{.Ledger}}</a></h1>
+  <div class="meta">task-ledger · settings {{template "appearance"}}</div>
+  <p>Title is what people see on the owner page. Retention is how long DONE stays on the default list.</p>
+</header>
+{{if .Message}}<p class="notice">{{.Message}}</p>{{end}}
+<form class="signin settings" method="post" action="/{{.Owner}}/{{.Ledger}}/settings">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label for="title">Title</label>
+  <input id="title" name="title" value="{{.LedgerTitle}}" maxlength="120" autocomplete="off">
+  <p class="hint">Shown next to the slug. Leave blank to show only the slug.</p>
+  <label for="archive_done_after_days">Hide DONE after (days)</label>
+  <input id="archive_done_after_days" name="archive_done_after_days" inputmode="numeric" value="{{.Archive}}" required>
+  <p class="hint">0 means DONE stays on the board. Archive is still on the board page.</p>
+  <label for="purge_done_after_days">Delete DONE after (days)</label>
+  <input id="purge_done_after_days" name="purge_done_after_days" inputmode="numeric" value="{{.Purge}}" required>
+  <p class="hint">0 means never delete. If set, it must be at least the hide-after value.</p>
+  <button type="submit">Save settings</button>
+</form>
+<p class="mast-actions"><a href="/{{.Owner}}">Back to {{.Owner}}</a> · <a href="/{{.Owner}}/{{.Ledger}}">Open the board</a></p>
+{{template "foot" .}}
+{{end}}

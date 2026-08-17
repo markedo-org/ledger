@@ -90,26 +90,46 @@ func (a *App) taskList(l types.Ledger, q ListQuery) store.TaskList {
 	return out
 }
 
+const MaxLedgerTitle = 120
+
 func (a *App) SetLedgerRetention(ctx context.Context, tok types.Token, owner, ledger string, archiveDays, purgeDays *int) (types.Ledger, error) {
+	return a.PatchLedger(ctx, tok, owner, ledger, nil, archiveDays, purgeDays)
+}
+
+func (a *App) PatchLedger(ctx context.Context, tok types.Token, owner, ledger string, title *string, archiveDays, purgeDays *int) (types.Ledger, error) {
 	if err := a.requireAdmin(tok); err != nil {
 		return types.Ledger{}, err
+	}
+	if title == nil && archiveDays == nil && purgeDays == nil {
+		return types.Ledger{}, fmt.Errorf("%w: title, archive_done_after_days, or purge_done_after_days required", ErrInvalid)
 	}
 	l, err := a.Ledger(ctx, tok, owner, ledger)
 	if err != nil {
 		return l, err
 	}
-	nextArchive, nextPurge := a.retentionDays(l)
-	if archiveDays != nil {
-		nextArchive = *archiveDays
+	if title != nil {
+		t := strings.TrimSpace(*title)
+		if len([]rune(t)) > MaxLedgerTitle {
+			return l, fmt.Errorf("%w: title must be %d characters or fewer", ErrInvalid, MaxLedgerTitle)
+		}
+		if err := a.Store.SetLedgerTitle(ctx, l.ID, t); err != nil {
+			return l, err
+		}
 	}
-	if purgeDays != nil {
-		nextPurge = *purgeDays
-	}
-	if err := ValidateRetention(nextArchive, nextPurge); err != nil {
-		return l, err
-	}
-	if err := a.Store.SetLedgerRetention(ctx, l.ID, archiveDays, purgeDays); err != nil {
-		return l, err
+	if archiveDays != nil || purgeDays != nil {
+		nextArchive, nextPurge := a.retentionDays(l)
+		if archiveDays != nil {
+			nextArchive = *archiveDays
+		}
+		if purgeDays != nil {
+			nextPurge = *purgeDays
+		}
+		if err := ValidateRetention(nextArchive, nextPurge); err != nil {
+			return l, err
+		}
+		if err := a.Store.SetLedgerRetention(ctx, l.ID, archiveDays, purgeDays); err != nil {
+			return l, err
+		}
 	}
 	return a.Store.ResolveLedger(ctx, owner, ledger)
 }
