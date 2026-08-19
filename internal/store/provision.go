@@ -209,7 +209,7 @@ func (s *Store) CreateToken(ctx context.Context, ownerID, actor, ledgerID, role,
 		}
 		if email != "" {
 			var taken int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tokens WHERE email = ?`, email).Scan(&taken); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tokens WHERE email = ? AND revoked_at = ''`, email).Scan(&taken); err != nil {
 				return err
 			}
 			if taken > 0 {

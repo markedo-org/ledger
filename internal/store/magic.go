@@ -39,7 +39,7 @@ func (s *Store) TokenByEmail(ctx context.Context, email string) (types.Token, er
 		FROM tokens t
 		JOIN owners o ON o.id = t.owner_id
 		LEFT JOIN ledgers l ON l.id = t.ledger_id
-		WHERE t.email = ?`, email).
+		WHERE t.email = ? AND t.revoked_at = ''`, email).
 		Scan(&t.ID, &t.Actor, &t.OwnerID, &ledger, &t.Role, &created, &t.OwnerSlug, &ledgerSlug)
 	if err != nil {
 		return t, err
@@ -119,7 +119,7 @@ func (s *Store) consumeOneTimeLink(ctx context.Context, table, plain string) (ty
 		FROM tokens t
 		JOIN owners o ON o.id = t.owner_id
 		LEFT JOIN ledgers l ON l.id = t.ledger_id
-		WHERE t.id = ?`, tokenID).
+		WHERE t.id = ? AND t.revoked_at = ''`, tokenID).
 		Scan(&t.ID, &t.Actor, &t.OwnerID, &ledger, &t.Role, &created, &t.OwnerSlug, &ledgerSlug)
 	if err != nil {
 		return t, err

@@ -97,6 +97,8 @@ func (s *Server) Engine() *gin.Engine {
 	v1.PATCH("/:owner/ledgers/:ledger", s.patchLedger)
 	v1.POST("/:owner/:ledger/reset", s.resetLedger)
 	v1.POST("/:owner/tokens", s.createToken)
+	v1.GET("/:owner/tokens", s.listTokens)
+	v1.DELETE("/:owner/tokens/:id", s.revokeToken)
 	v1.POST("/:owner/:ledger/tasks", s.create)
 	v1.GET("/:owner/:ledger/tasks", s.list)
 	v1.GET("/:owner/:ledger/tasks/:handle", s.get)
@@ -330,7 +332,26 @@ func (s *Server) createToken(c *gin.Context) {
 	if issued.Token.Email != "" {
 		body["email"] = issued.Token.Email
 	}
+	body["id"] = issued.Token.ID
 	c.JSON(http.StatusCreated, body)
+}
+
+func (s *Server) listTokens(c *gin.Context) {
+	list, err := s.App.ListTokens(c.Request.Context(), tokenFrom(c), c.Param("owner"))
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"owner": c.Param("owner"), "tokens": list})
+}
+
+func (s *Server) revokeToken(c *gin.Context) {
+	info, err := s.App.RevokeToken(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("id"))
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, info)
 }
 
 func (s *Server) create(c *gin.Context) {

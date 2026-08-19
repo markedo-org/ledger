@@ -57,6 +57,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE sessions ADD COLUMN ledger_slug TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE tokens ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE tokens ADD COLUMN revoked_at TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN token_id TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS magic_links (
   id TEXT PRIMARY KEY,
   code_hash TEXT NOT NULL UNIQUE,
@@ -71,7 +73,7 @@ func migrate(db *sql.DB) error {
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 )`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email) WHERE email != ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email) WHERE email != '' AND revoked_at = ''`,
 		`ALTER TABLE ledgers ADD COLUMN archive_done_after_days INTEGER`,
 		`ALTER TABLE ledgers ADD COLUMN purge_done_after_days INTEGER`,
 		`ALTER TABLE tasks ADD COLUMN claim_id_hash TEXT`,
@@ -86,7 +88,36 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("migrate: %s: %w", stmt, err)
 		}
 	}
+	if err := migrateTokenEmailIndex(db); err != nil {
+		return err
+	}
 	return migrateIdempotencyScope(db)
+}
+
+// The email index was unique across every token, so a revoked token kept its
+// address hostage and the replacement could never be minted with it. Revoked
+// rows are excluded, which is what makes rotating a token with an email on it
+// possible at all.
+func migrateTokenEmailIndex(db *sql.DB) error {
+	var ddl string
+	err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_tokens_email'`).Scan(&ddl)
+	if err == sql.ErrNoRows {
+		ddl = ""
+	} else if err != nil {
+		return err
+	}
+	if strings.Contains(strings.ReplaceAll(ddl, " ", ""), "revoked_at=''") {
+		return nil
+	}
+	for _, stmt := range []string{
+		`DROP INDEX IF EXISTS idx_tokens_email`,
+		`CREATE UNIQUE INDEX idx_tokens_email ON tokens(email) WHERE email != '' AND revoked_at = ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate token email index: %w", err)
+		}
+	}
+	return nil
 }
 
 // The first schema made an idempotency key globally unique, but the replay
@@ -235,7 +266,7 @@ func (s *Store) LookupToken(ctx context.Context, tokenPlain string) (types.Token
 		FROM tokens t
 		JOIN owners o ON o.id = t.owner_id
 		LEFT JOIN ledgers l ON l.id = t.ledger_id
-		WHERE t.token_hash = ?`, HashToken(tokenPlain)).
+		WHERE t.token_hash = ? AND t.revoked_at = ''`, HashToken(tokenPlain)).
 		Scan(&t.ID, &t.Actor, &t.OwnerID, &ledger, &t.Role, &created, &t.OwnerSlug, &ledgerSlug)
 	if err != nil {
 		return t, err

@@ -19,7 +19,9 @@ func NewSessionToken() (string, error) {
 	return "lgs_" + hex.EncodeToString(b[:]), nil
 }
 
-func (s *Store) CreateSession(ctx context.Context, actor, githubID, login, ownerSlug, ledgerSlug, role string, ttl time.Duration) (types.Session, string, error) {
+// tokenID may be empty for a GitHub operator sign-in, which has no row in
+// tokens. When it is set, revoking that token takes the session with it.
+func (s *Store) CreateSession(ctx context.Context, actor, githubID, login, ownerSlug, ledgerSlug, role, tokenID string, ttl time.Duration) (types.Session, string, error) {
 	plain, err := NewSessionToken()
 	if err != nil {
 		return types.Session{}, "", err
@@ -35,19 +37,20 @@ func (s *Store) CreateSession(ctx context.Context, actor, githubID, login, owner
 		OwnerSlug:   ownerSlug,
 		LedgerSlug:  ledgerSlug,
 		Role:        role,
+		TokenID:     tokenID,
 		ExpiresAt:   t.Add(ttl),
 		CreatedAt:   t,
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO sessions(id, token_hash, actor, github_id, github_login, owner_slug, ledger_slug, role, expires_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		sess.ID, HashToken(plain), actor, githubID, login, ownerSlug, ledgerSlug, role, fmtTime(sess.ExpiresAt), fmtTime(sess.CreatedAt))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO sessions(id, token_hash, actor, github_id, github_login, owner_slug, ledger_slug, role, token_id, expires_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		sess.ID, HashToken(plain), actor, githubID, login, ownerSlug, ledgerSlug, role, tokenID, fmtTime(sess.ExpiresAt), fmtTime(sess.CreatedAt))
 	return sess, plain, err
 }
 
 func (s *Store) LookupSession(ctx context.Context, plain string) (types.Session, error) {
 	var sess types.Session
 	var exp, created string
-	err := s.db.QueryRowContext(ctx, `SELECT id, actor, github_id, github_login, owner_slug, ledger_slug, role, expires_at, created_at FROM sessions WHERE token_hash = ?`,
-		HashToken(plain)).Scan(&sess.ID, &sess.Actor, &sess.GitHubID, &sess.GitHubLogin, &sess.OwnerSlug, &sess.LedgerSlug, &sess.Role, &exp, &created)
+	err := s.db.QueryRowContext(ctx, `SELECT id, actor, github_id, github_login, owner_slug, ledger_slug, role, token_id, expires_at, created_at FROM sessions WHERE token_hash = ?`,
+		HashToken(plain)).Scan(&sess.ID, &sess.Actor, &sess.GitHubID, &sess.GitHubLogin, &sess.OwnerSlug, &sess.LedgerSlug, &sess.Role, &sess.TokenID, &exp, &created)
 	if err != nil {
 		return sess, err
 	}

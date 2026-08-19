@@ -252,7 +252,7 @@ func (s *Server) githubCallback(c *gin.Context) {
 		}))
 		return
 	}
-	sess, plain, err := s.App.CreateSession(c.Request.Context(), u.Login, strconv.FormatInt(u.ID, 10), u.Login, "", "", types.RoleOperator)
+	sess, plain, err := s.App.CreateSession(c.Request.Context(), u.Login, strconv.FormatInt(u.ID, 10), u.Login, "", "", types.RoleOperator, "")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "could not create session")
 		return

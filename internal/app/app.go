@@ -590,11 +590,11 @@ func (a *App) PublicOwner(ctx context.Context, ownerSlug string) (types.Owner, [
 	return o, infos, err
 }
 
-func (a *App) CreateSession(ctx context.Context, actor, githubID, login, ownerSlug, ledgerSlug, role string) (types.Session, string, error) {
+func (a *App) CreateSession(ctx context.Context, actor, githubID, login, ownerSlug, ledgerSlug, role, tokenID string) (types.Session, string, error) {
 	if actor == "" {
 		actor = login
 	}
-	return a.Store.CreateSession(ctx, actor, githubID, login, ownerSlug, ledgerSlug, role, SessionTTL)
+	return a.Store.CreateSession(ctx, actor, githubID, login, ownerSlug, ledgerSlug, role, tokenID, SessionTTL)
 }
 
 func (a *App) SessionFromAPIToken(ctx context.Context, apiToken string) (types.Session, string, error) {
@@ -602,7 +602,7 @@ func (a *App) SessionFromAPIToken(ctx context.Context, apiToken string) (types.S
 	if err != nil {
 		return types.Session{}, "", err
 	}
-	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok))
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok), tok.ID)
 }
 
 // sessionRole carries the token's own role onto the HTML session. Without it
@@ -838,4 +838,42 @@ func (a *App) CreateToken(ctx context.Context, tok types.Token, ownerSlug string
 		return IssuedToken{}, fmt.Errorf("%w: email already bound to a token", ErrConflict)
 	}
 	return IssuedToken{Token: issued, Plain: plain}, nil
+}
+
+func (a *App) ListTokens(ctx context.Context, tok types.Token, ownerSlug string) ([]types.TokenInfo, error) {
+	if err := a.requireAdmin(tok); err != nil {
+		return nil, err
+	}
+	o, err := a.resolveOwner(ctx, tok, ownerSlug)
+	if err != nil {
+		return nil, err
+	}
+	return a.Store.ListTokens(ctx, o.ID)
+}
+
+// RevokeToken kills a bearer token for good. It refuses to revoke the token
+// making the request, which is not squeamishness: a token cannot be un-revoked
+// and the plaintext is gone, so revoking the one in your own hand locks you out
+// of the owner entirely. Minting the replacement first and revoking with that
+// is the only order that cannot strand you.
+func (a *App) RevokeToken(ctx context.Context, tok types.Token, ownerSlug, tokenID string) (types.TokenInfo, error) {
+	if err := a.requireAdmin(tok); err != nil {
+		return types.TokenInfo{}, err
+	}
+	o, err := a.resolveOwner(ctx, tok, ownerSlug)
+	if err != nil {
+		return types.TokenInfo{}, err
+	}
+	tokenID = strings.TrimSpace(tokenID)
+	if tokenID == "" {
+		return types.TokenInfo{}, fmt.Errorf("%w: token id is required", ErrInvalid)
+	}
+	if tokenID == tok.ID {
+		return types.TokenInfo{}, fmt.Errorf("%w: that is the token you are using. Mint the replacement first, then revoke this one with the new token", ErrInvalid)
+	}
+	info, err := a.Store.RevokeToken(ctx, o.ID, tokenID)
+	if err == sql.ErrNoRows {
+		return types.TokenInfo{}, ErrNotFound
+	}
+	return info, err
 }

@@ -60,7 +60,9 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 | `ledger ledger list` | Owner admin or operator |
 | `ledger ledger set --slug [--title] [--archive-done-after-days N] [--purge-done-after-days N]` | Owner admin. Title and per-ledger DONE retention. `0` means never |
 | `ledger ledger reset --slug --confirm owner/ledger` | Owner admin or operator. Wipes tasks and restarts at T-001. Tokens stay. |
-| `ledger token mint --actor [--ledger] [--role write] [--email]` | Owner admin |
+| `ledger token mint --actor [--ledger] [--role write] [--email]` | Owner admin. Returns plaintext and id once. |
+| `ledger token list [--owner slug] [--profile name]` | Owner admin or operator. Id and metadata only. |
+| `ledger token revoke --id <token id> [--owner slug] [--profile name]` | Owner admin or operator. Irreversible. A token cannot revoke itself. |
 
 `init --write-cursor` also merges the admin MCP server into
 `./.cursor/mcp.json`.

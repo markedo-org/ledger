@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS tokens (
   ledger_id TEXT REFERENCES ledgers(id),
   role TEXT NOT NULL DEFAULT 'write',
   email TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  revoked_at TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -136,6 +137,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   owner_slug TEXT NOT NULL DEFAULT '',
   ledger_slug TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT '',
+  token_id TEXT NOT NULL DEFAULT '',
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 );

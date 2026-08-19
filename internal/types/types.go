@@ -102,6 +102,22 @@ type Token struct {
 
 func (t Token) IsOperator() bool { return t.Role == RoleOperator }
 
+// TokenInfo describes a minted token without any part of the secret. The
+// plaintext is shown once at mint and the hash never leaves the store, so a
+// listing can only ever identify a token by its id and what it is bound to.
+type TokenInfo struct {
+	ID         string     `json:"id"`
+	Actor      string     `json:"actor"`
+	OwnerSlug  string     `json:"owner"`
+	LedgerSlug string     `json:"ledger,omitempty"`
+	Role       string     `json:"role"`
+	Email      string     `json:"email,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+}
+
+func (t TokenInfo) Revoked() bool { return t.RevokedAt != nil }
+
 type Task struct {
 	ID              string
 	LedgerID        string
@@ -170,6 +186,7 @@ type Session struct {
 	OwnerSlug   string
 	LedgerSlug  string
 	Role        string
+	TokenID     string // the token this session was signed in with, if any
 	ExpiresAt   time.Time
 	CreatedAt   time.Time
 }

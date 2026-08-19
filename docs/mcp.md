@@ -54,19 +54,21 @@ See `.agents/skills/task-ledger/`.
 
 ## Tools
 
-`list_ledgers`, `create_ledger`, `create_token`, `reset_ledger`,
+`list_ledgers`, `create_ledger`, `create_token`, `list_tokens`, `revoke_token`,
+`reset_ledger`,
 `create_owner`, `set_max_ledgers`, `list_tasks`, `get_task`, `create_task`,
 `claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
 `close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`,
 `set_tags`. `set_phase` accepts optional `force` to override a fourth deferral.
 
 `create_owner` and `set_max_ledgers` need the operator token
-(`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` / `reset_ledger`
-accept owner admin or operator. `reset_ledger` requires `confirm` equal to
+(`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` / `list_tokens` /
+`revoke_token` / `reset_ledger` accept owner admin or operator. A ledger-bound
+write token is refused for token list and revoke. `reset_ledger` requires `confirm` equal to
 `owner/ledger`. It wipes every task and restarts the series at T-001.
 Write tokens are refused. Tokens and the ledger row stay.
 
-Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key`.
+`create_token` returns plaintext and id once. Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key`.
 `close_task` requires `evidence`. Moving a task later requires `reason`.
 
 `claim_task` and `next_task` return `claim_id` once. Keep it in that chat.
@@ -96,6 +98,19 @@ is a ledger-bound token. See the task-ledger skill for when to tag.
 7, or the ledger override). Pass `done: true` for every DONE task, and only
 those. `get_task` still loads a hidden handle. There is no purge tool. The
 server may delete DONE after `purge_done_after_days` (default 0, never).
+
+`list_tokens` returns id and metadata only, never the secret or its hash.
+`revoke_token` takes a token id. Revocation is irreversible. It invalidates
+the bearer everywhere, deletes HTML sessions signed in with that token, and
+clears any outstanding magic link or review link bound to it. The row stays
+for audit. Revoking twice is a no-op. A token cannot revoke itself: mint the
+replacement first, update every config that held the old token, then revoke
+the old id with the new token.
+
+To rotate a token: list to find the id you are replacing; mint the replacement
+(and if the old token had an email bound, revoke the old one before you can
+reuse that address); put the new token in every config that held the old one;
+revoke the old id with the new token.
 
 ## Resource
 

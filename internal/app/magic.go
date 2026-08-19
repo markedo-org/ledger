@@ -98,7 +98,7 @@ func (a *App) ConsumeReviewLink(ctx context.Context, code string) (types.Session
 	if err != nil {
 		return types.Session{}, "", err
 	}
-	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok))
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok), tok.ID)
 }
 
 func (a *App) ConsumeMagicLink(ctx context.Context, code string) (types.Session, string, error) {
@@ -113,7 +113,7 @@ func (a *App) ConsumeMagicLink(ctx context.Context, code string) (types.Session,
 	if err != nil {
 		return types.Session{}, "", err
 	}
-	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok))
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok), tok.ID)
 }
 
 type magicGate struct {

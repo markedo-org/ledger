@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.18.0
+
+Tokens can be revoked. Until now they could only be minted, so every token
+ever issued stayed valid forever and a leaked one could not be taken out of
+circulation. There was no listing either, so an owner could not even see what
+was outstanding.
+
+`GET /v1/:owner/tokens` lists what an owner has minted, live and revoked, and
+`DELETE /v1/:owner/tokens/:id` kills one. Both are admin only, and a
+ledger-bound write token is refused. The CLI gains `ledger token list` and
+`ledger token revoke --id`, and MCP gains `list_tokens` and `revoke_token`. A
+listing identifies a token by id and never returns the secret or its hash,
+because neither can be recovered after the mint.
+
+A revoked token fails every way in, not just the bearer header: the
+magic-link-by-email lookup and the token load behind a one-time link check it
+too. Revoking also deletes any HTML session signed in with that token and any
+magic or review link still outstanding on it, so revocation is immediate rather
+than a wait for the session to expire. Sessions gained a `token_id` to make
+that possible. The token row itself stays, so the audit trail still shows who
+held what.
+
+A token cannot revoke itself. Revocation is irreversible and the plaintext is
+gone, so revoking the one in your own hand would lock you out of the owner
+completely. Mint the replacement, put it everywhere the old one lived, then
+revoke the old id with the new token.
+
+The unique index on token email now covers live tokens only. It used to span
+every row, so a revoked token held its address hostage and the replacement
+could never carry it, which made rotating an email-bound token impossible.
+Existing databases migrate on start and keep their rows.
+
 ## 0.17.1
 
 A lost `claim_id` no longer strands a task.

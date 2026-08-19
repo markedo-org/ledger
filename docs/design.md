@@ -35,6 +35,9 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
 
 ## Semantics that cannot wait
 
+- Bearer token is identity. Admin lists by id, no secret. Revoke is
+  irreversible, cascades to HTML sessions and one-time links, row kept for
+  audit. Cannot self-revoke; mint the replacement first.
 - Two identities: uuid plus human handle, allocated in the insert transaction.
   Numbers never reused while those tasks exist. An admin or operator reset
   (confirm `owner/ledger`) wipes the ledger and restarts the series at 1.

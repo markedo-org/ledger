@@ -68,6 +68,14 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Description: "Mint a bearer token (plaintext once). Admin only. For a project agent, set ledger and role write, and put that token in an MCP server named for the project. Omit ledger for an owner-scoped token; name that MCP server for admin. Optional email binds the token for magic-link sign-in.",
 	}, h.createToken)
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "list_tokens",
+		Description: "List every token minted for an owner, live and revoked. Admin only. Shows the id, actor, role, ledger binding and email, never the secret. Use it to find the id to revoke.",
+	}, h.listTokens)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "revoke_token",
+		Description: "Revoke a bearer token by id. Admin only. Kills any HTML session and any magic or review link standing on it. Irreversible: the plaintext is gone, so a revoked token can never be restored. A token cannot revoke itself, so to rotate, mint the replacement, put it in every config that held the old one, then revoke the old id with the new token.",
+	}, h.revokeToken)
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "reset_ledger",
 		Description: "Wipe every task on a ledger and restart the series at T-001. Owner admin or operator. confirm must be exactly owner/ledger. Tokens and the ledger row stay. Write tokens are refused. Irreversible.",
 	}, h.resetLedger)
@@ -268,6 +276,71 @@ func (h *host) createToken(ctx context.Context, _ *mcp.CallToolRequest, in creat
 	}
 	if issued.Token.Email != "" {
 		out["email"] = issued.Token.Email
+	}
+	out["id"] = issued.Token.ID
+	return nil, out, nil
+}
+
+type listTokensIn struct {
+	Owner string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+}
+
+func (h *host) listTokens(ctx context.Context, _ *mcp.CallToolRequest, in listTokensIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, err := h.ownerScope(in.Owner)
+	if err != nil {
+		return nil, nil, err
+	}
+	list, err := h.app.ListTokens(ctx, h.tok, owner)
+	if err != nil {
+		return nil, nil, err
+	}
+	out := make([]map[string]any, 0, len(list))
+	for _, t := range list {
+		row := map[string]any{
+			"id":         t.ID,
+			"actor":      t.Actor,
+			"role":       t.Role,
+			"created_at": t.CreatedAt.Format(time.RFC3339),
+			"revoked":    t.Revoked(),
+		}
+		if t.LedgerSlug != "" {
+			row["ledger"] = t.LedgerSlug
+		}
+		if t.Email != "" {
+			row["email"] = t.Email
+		}
+		if t.RevokedAt != nil {
+			row["revoked_at"] = t.RevokedAt.Format(time.RFC3339)
+		}
+		out = append(out, row)
+	}
+	return nil, map[string]any{"owner": owner, "tokens": out}, nil
+}
+
+type revokeTokenIn struct {
+	Owner string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	ID    string `json:"id" jsonschema:"Token id from list_tokens. Not the secret."`
+}
+
+func (h *host) revokeToken(ctx context.Context, _ *mcp.CallToolRequest, in revokeTokenIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, err := h.ownerScope(in.Owner)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := h.app.RevokeToken(ctx, h.tok, owner, in.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	out := map[string]any{
+		"id":      info.ID,
+		"actor":   info.Actor,
+		"role":    info.Role,
+		"owner":   info.OwnerSlug,
+		"revoked": info.Revoked(),
+		"note":    "Gone for good. Any session or one-time link on this token is dead too.",
+	}
+	if info.RevokedAt != nil {
+		out["revoked_at"] = info.RevokedAt.Format(time.RFC3339)
 	}
 	return nil, out, nil
 }

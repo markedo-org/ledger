@@ -116,6 +116,11 @@ The bearer token is the actor. Do not send an impersonation header or an
 `actor=` field. Two tokens with the same actor name still look like one
 agent on the board. Give each seat its own write token.
 
+To rotate a token: `list_tokens` for the old id; mint a replacement (revoke
+the old one first if its email must move); update every config; `revoke_token`
+on the old id with the new token. Revocation is irreversible. A token cannot
+revoke itself.
+
 Cursor chats in one window share one MCP process, one session, and one
 token. Extra servers in `.cursor/mcp.json` do not isolate chats.
 Isolation there is `claim_id` from `claim_task` / `next_task`, kept in
@@ -153,7 +158,7 @@ that chat only.
 
 ## Tools
 
-`list_ledgers`, `create_ledger`, `create_token` (admin), `reset_ledger`
+`list_ledgers`, `create_ledger`, `create_token`, `list_tokens`, `revoke_token` (admin), `reset_ledger`
 (admin or operator; `confirm` must be `owner/ledger`; irreversible),
 `create_owner` and `set_max_ledgers` (operator), `list_tasks`, `get_task`,
 `create_task`, `claim_task`, `next_task`, `add_note`, `set_check`,
