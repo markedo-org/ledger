@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.1
+
+The mail `FROM` may now carry a display name, so a sign-in link arrives from
+"Task Ledger" rather than a bare address. It used to be handed to `MAIL FROM`
+verbatim, and an envelope sender is not allowed a display name, so anything but
+a bare address was rejected by the mail server on every send. The header keeps
+the full form and the envelope gets the address inside it.
+
+A `FROM` with no address in it at all now leaves mail switched off instead of
+being accepted at start and failing at every send. `FROM` still defaults to
+`USER`, which is right when the username is an address and wrong for providers
+whose username is a literal like `resend`.
+
 ## 0.18.0
 
 Tokens can be revoked. Until now they could only be minted, so every token

@@ -125,7 +125,13 @@ same session cookie as paste-to-login. The API token never goes in the mail.
   it.
 - `LEDGER_PUBLIC_URL` is the base of the link (default `http://127.0.0.1:8080`).
 - The operator env token has no email. Paste it at `/login`.
-- Do not put a personal mailbox on the hosted service. Hosted SMTP is a later
-  choice.
+- `FROM` may carry a display name, `Task Ledger <hello@example.com>`. The
+  envelope sender is the bare address inside it. A `FROM` with no address at all
+  leaves mail off rather than failing at every send, which is why `FROM`
+  defaulting to a `USER` like `resend` does not count as configured.
+
+Use a sending domain you control, with SPF and DKIM set up at your mail
+provider, and an address on that domain. A personal mailbox as the sender lands
+in spam and puts that mailbox's password on the server.
 
 The email form is hidden when SMTP is off.

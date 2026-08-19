@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	netmail "net/mail"
 	"net/smtp"
 	"os"
 	"strconv"
@@ -43,7 +44,24 @@ func FromEnv() *SMTP {
 	if host == "" || user == "" || pass == "" || from == "" {
 		return nil
 	}
+	if envelopeFrom(from) == "" {
+		return nil
+	}
 	return &SMTP{Host: host, Port: port, User: user, Pass: pass, From: from}
+}
+
+// envelopeFrom reduces a From to the bare address SMTP wants in MAIL FROM. The
+// header may carry a display name, "Task Ledger <hello@example.com>", which is
+// not a valid envelope sender. Returns "" if there is no address to send from.
+func envelopeFrom(from string) string {
+	from = strings.TrimSpace(from)
+	if a, err := netmail.ParseAddress(from); err == nil {
+		return a.Address
+	}
+	if strings.Contains(from, "@") && !strings.ContainsAny(from, "<> ") {
+		return from
+	}
+	return ""
 }
 
 func (s *SMTP) Enabled() bool { return s != nil && s.Host != "" && s.User != "" && s.Pass != "" }
@@ -92,7 +110,7 @@ func (s *SMTP) Send(ctx context.Context, to, subject, body string) error {
 	if err := c.Auth(smtp.PlainAuth("", s.User, s.Pass, s.Host)); err != nil {
 		return err
 	}
-	if err := c.Mail(s.From); err != nil {
+	if err := c.Mail(envelopeFrom(s.From)); err != nil {
 		return err
 	}
 	if err := c.Rcpt(to); err != nil {
