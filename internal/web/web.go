@@ -708,7 +708,7 @@ func (s *Server) htmlLedger(c *gin.Context) {
 		"Frozen":    frozen,
 		"Archive":   archive,
 		"Tag":       tag,
-		"AllHref":   boardQuery(archive, ""),
+		"AllHref":   "/" + l.OwnerSlug + "/" + l.Slug + boardQuery(archive, ""),
 		"BoardHref": "/" + l.OwnerSlug + "/" + l.Slug + boardQuery(false, tag),
 		"DoneHref":  "/" + l.OwnerSlug + "/" + l.Slug + boardQuery(true, tag),
 		"TagLinks":  tagLinks,

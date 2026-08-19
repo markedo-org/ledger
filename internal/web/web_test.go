@@ -456,6 +456,12 @@ func TestHTMLTagsFilter(t *testing.T) {
 	if !strings.Contains(page, "Trackveil work") || strings.Contains(page, "Finance work") {
 		t.Fatalf("filter: %s", page)
 	}
+	if !strings.Contains(page, `href="/markedo/meta">all</a>`) {
+		t.Fatalf("all link must clear tag: %s", page)
+	}
+	if strings.Contains(page, `href="">all</a>`) {
+		t.Fatal("empty all href keeps the current tag")
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v1/markedo/meta/tasks?tag=finance", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)

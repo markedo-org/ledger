@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.1
+
+The board's **all** tag chip links to the ledger path with no `tag`
+query, so it leaves a filtered view. An empty `href` kept `?tag=`.
+
 ## 0.16.0
 
 Owner admin or operator can reset a ledger: wipe every task and restart
