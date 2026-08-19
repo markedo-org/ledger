@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.12
+
+Phase headings sit in space, not between two similar rules. The last
+row of a section no longer draws a trailing divider.
+
 ## 0.15.11
 
 Tag badges sit vertically centered against the two-line title and meta

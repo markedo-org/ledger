@@ -273,11 +273,9 @@ h2.phase {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--mute);
-  margin: 1.75rem 0 0.4rem;
-  padding-top: 0.4rem;
-  border-top: 1px solid var(--rule);
+  margin: 2.35rem 0 0.45rem;
 }
-h2.phase:first-of-type { border-top: 0; padding-top: 0; }
+h2.phase:first-of-type { margin-top: 0; }
 
 .desk {
   margin: 2rem 0 0;
@@ -315,6 +313,9 @@ h2.phase:first-of-type { border-top: 0; padding-top: 0; }
 .register { list-style: none; margin: 0; padding: 0; }
 .register li {
   border-bottom: 1px dotted var(--rule);
+}
+.register li:last-child {
+  border-bottom: 0;
 }
 .register li.claimed {
   box-shadow: inset 3px 0 0 var(--claim);
