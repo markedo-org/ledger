@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/markedo-org/ledger/blob/main/SECURITY.md
+    about: Email lg@markedo.com. Do not open a public issue.
+  - name: Getting started and self-hosting
+    url: https://github.com/markedo-org/ledger/blob/main/README.md
+    about: Read this before opening a bug about setup.

@@ -34,7 +34,7 @@ func ownerCreate(args []string) int {
 	title := fs.String("title", "", "first ledger title")
 	actor := fs.String("actor", "", "admin actor to mint")
 	email := fs.String("email", "", "optional email on the minted token")
-	max := fs.Int("max-ledgers", 1, "max_ledgers (0 is unlimited)")
+	max := fs.Int("max-ledgers", 1, "max_ledgers cap (default 1; 0 is treated as 1 on create)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

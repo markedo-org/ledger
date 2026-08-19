@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in the server, CLI, or MCP endpoint behaves wrongly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report a security issue here. See SECURITY.md and email
+        lg@markedo.com instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `ledger version`, or the tag you built from.
+      placeholder: "0.17.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options:
+        - HTTP API
+        - MCP endpoint
+        - HTML board
+        - CLI
+        - Hosted task-ledger.com
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The request or command you ran and the response you got.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Steps from a fresh database if you can. Redact any token.

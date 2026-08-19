@@ -58,7 +58,7 @@ See `.agents/skills/task-ledger/`.
 `create_owner`, `set_max_ledgers`, `list_tasks`, `get_task`, `create_task`,
 `claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
 `close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`,
-`set_tags`.
+`set_tags`. `set_phase` accepts optional `force` to override a fourth deferral.
 
 `create_owner` and `set_max_ledgers` need the operator token
 (`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` / `reset_ledger`
@@ -68,11 +68,11 @@ Write tokens are refused. Tokens and the ledger row stay.
 
 Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key`.
 `close_task` requires `evidence`. Moving a task later requires `reason`.
-`set_phase` accepts `force` to override the fourth-deferral block.
 
 `claim_task` and `next_task` return `claim_id` once. Keep it in that chat.
-Pass it on heartbeat, same-actor re-claim, release, close, and phase while
-the lease is live. `get_task`, `list_tasks`, and HTML never include it.
+Pass it on heartbeat, same-actor re-claim, release, close, phase, checks, and
+tags while the lease is live. `set_check` and `set_tags` require it the same
+way as `set_phase` and `close_task`. `get_task`, `list_tasks`, and HTML never include it.
 Leases created before this field stay on the old same-actor refresh until
 they expire. Steal from another actor issues a new `claim_id`. There is no
 recover-my-own-lease path.

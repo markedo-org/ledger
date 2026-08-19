@@ -26,6 +26,7 @@ type Server struct {
 	SiteURL string
 	tmpl    *template.Template
 	static  fs.FS
+	signIn  *signInGate
 }
 
 func New(a *app.App) (*Server, error) {
@@ -41,7 +42,12 @@ func New(a *app.App) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{App: a, tmpl: tmpl, static: static}, nil
+	return &Server{
+		App:    a,
+		tmpl:   tmpl,
+		static: static,
+		signIn: newSignInGate(loginAttempts, loginWindow),
+	}, nil
 }
 
 // Handler serves the HTML/API engine and mounts MCP on the stdlib mux so
@@ -63,10 +69,10 @@ func (s *Server) Engine() *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 	r.GET("/login", s.login)
-	r.POST("/login", s.loginPost)
-	r.GET("/login/email", s.loginEmailGet)
-	r.POST("/login/email", s.loginEmailPost)
-	r.GET("/login/review", s.loginReviewGet)
+	r.POST("/login", s.throttleSignIn, s.loginPost)
+	r.GET("/login/email", s.throttleSignIn, s.loginEmailGet)
+	r.POST("/login/email", s.throttleSignIn, s.loginEmailPost)
+	r.GET("/login/review", s.throttleSignIn, s.loginReviewGet)
 	r.GET("/login/github", s.loginGitHub)
 	r.POST("/logout", s.logout)
 	r.GET("/logout", func(c *gin.Context) {
@@ -502,9 +508,10 @@ func (s *Server) note(c *gin.Context) {
 
 func (s *Server) check(c *gin.Context) {
 	var in struct {
-		N    int    `json:"n"`
-		Body string `json:"body"`
-		Done *bool  `json:"done"`
+		N       int    `json:"n"`
+		Body    string `json:"body"`
+		Done    *bool  `json:"done"`
+		ClaimID string `json:"claim_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
@@ -514,7 +521,7 @@ func (s *Server) check(c *gin.Context) {
 		s.fail(c, fmt.Errorf("%w: done required", app.ErrInvalid))
 		return
 	}
-	t, err := s.App.SetCheck(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.N, in.Body, *in.Done)
+	t, err := s.App.SetCheck(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.N, in.Body, *in.Done, in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -524,13 +531,14 @@ func (s *Server) check(c *gin.Context) {
 
 func (s *Server) tags(c *gin.Context) {
 	var in struct {
-		Tags []string `json:"tags"`
+		Tags    []string `json:"tags"`
+		ClaimID string   `json:"claim_id"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
 		return
 	}
-	t, err := s.App.SetTags(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.Tags)
+	t, err := s.App.SetTags(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.Tags, in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return

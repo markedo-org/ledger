@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.17.0
+
+Security and correctness pass over the whole server. Four fixes change
+behaviour, so read the last two before upgrading a shared board.
+
+Purge deleted a task's notes, checks, deps, idempotency rows and events
+but never its tags, so a foreign key aborted the delete. One tagged DONE
+task past the purge window stopped retention for every ledger on the
+host. Reset already handled tags, which is why reset worked and purge did
+not.
+
+An `idempotency_key` was unique across the whole database while the replay
+lookup was scoped to one ledger. Two ledgers under one owner using the
+same key missed the lookup and then collided on the primary key, so create
+failed with a raw SQLite error instead of replaying. The table is rebuilt
+on `(ledger_id, key)`. Existing databases migrate on start and keep their
+rows.
+
+`set_check` and `set_tags` now require `claim_id` while a lease is live,
+the same as `set_phase` and `close_task`. Any write token on the ledger
+could previously tick another agent's checks and let it close on evidence
+alone. `add_note` stays open on purpose: notes are append-only, so a
+reviewer can comment on a task someone else holds.
+
+An HTML sign-in now keeps its token's role. Every non-operator session was
+recorded without one and then treated as owner admin, so a ledger-bound
+write token could open ledger settings and change retention, which deletes
+work. Settings need an admin session, matching the REST route. Sessions
+made before this release carry no role and are treated as write, so sign
+in again to reach settings.
+
+The sign-in routes are rate limited to 10 attempts per address per minute.
+Bearer tokens, magic codes, and review codes were all guessable at line
+rate.
+
+`serve` no longer prints the minted boot token to the service log, where
+journald kept it. It writes the token to `<db>.boot-token` with mode 0600
+and logs the path instead. Rotate any token that a previous version
+logged.
+
+MCP reports the real build version rather than 0.4.0, and `ledger://live`
+renders against `LEDGER_PUBLIC_URL` rather than a hardcoded localhost.
+
+Docs caught up with the code: the CLI is no longer described as future
+work, the README API table lists the tags and review routes and the `done`
+and `tag` query parameters, and `owner create --max-ledgers` says what it
+actually does. The repository gained a real SECURITY.md, Dependabot,
+CODEOWNERS, and issue and pull request templates.
+
 ## 0.16.1
 
 The board's **all** tag chip links to the ledger path with no `tag`

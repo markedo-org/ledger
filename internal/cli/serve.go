@@ -58,12 +58,20 @@ func Serve(args []string, version, commit, date string) int {
 	}
 	if res.Created {
 		log.Printf("booted %s/%s actor=%s", *bootOwner, *bootLedger, *bootActor)
-		log.Printf("boot token (save this, it is not stored in plaintext): %s", res.Token)
+		if os.Getenv("LEDGER_BOOT_TOKEN") == "" {
+			path := *dbPath + ".boot-token"
+			if err := os.WriteFile(path, []byte(res.Token+"\n"), 0o600); err != nil {
+				log.Printf("could not write the boot token to %s: %v", path, err)
+				return 1
+			}
+			log.Printf("boot token written to %s, read it once and delete it", path)
+		}
 	} else {
 		log.Printf("database already initialised")
 	}
 
 	a := app.New(st)
+	a.Version = version
 	archiveDays, purgeDays, err := app.RetentionFromEnv()
 	if err != nil {
 		log.Print(err)

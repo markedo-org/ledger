@@ -137,4 +137,3 @@ func mcpObject(name, origin, token string) map[string]any {
 		},
 	}
 }
-

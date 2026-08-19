@@ -132,6 +132,9 @@ func (s *Store) PurgeDoneBefore(ctx context.Context, ledgerID string, before tim
 		}
 		t := now()
 		for _, r := range dead {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM task_tags WHERE task_id = ?`, r.id); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE task_id = ?`, r.id); err != nil {
 				return err
 			}

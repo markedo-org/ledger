@@ -125,9 +125,11 @@ that chat only.
 
 1. Claim before you work. Keep `claim_id` from `claim_task` or
    `next_task` in this chat. Pass it on heartbeat, re-claim, release,
-   close, and phase while the lease is live. Do not put it in a note or
-   share it. Heartbeat if you will run past the lease. Pass
-   `ttl_seconds` when you already know it will be long (max 24h, default 30m).
+   close, phase, `set_check`, and `set_tags` while the lease is live. Do
+   not put it in a note or share it. Heartbeat if you will run past the
+   lease. Pass `ttl_seconds` when you already know it will be long (max
+   24h, default 30m). `add_note` stays open: notes are append-only, so a
+   reviewer can comment on a task you hold.
 2. Intent-shaped operations only. No whole-object PUT.
 3. Actor is the token, not a prefix. Series `T-` is a workstream.
 4. `idempotency_key` on every create. Agents retry.
@@ -141,8 +143,9 @@ that chat only.
 11. The title is a short human summary and nothing else. No handle, no series
     prefix, no ID carried in from somewhere else. The server allocates the
     handle, so `T-042: fix the webhook` puts two different IDs on one row.
-    **A title cannot be corrected.** There is no tool and no route for it, so a
-    bad title stands until someone edits the database by hand. Get it right at
+    **A title cannot be corrected.** There is no MCP tool and no REST route for
+    it; the only mutation in the server is on a *ledger's* title, not a task's.
+    A bad title stands until someone edits the database by hand. Get it right at
     create time, because you get one attempt.
 
 ## Tools
@@ -154,8 +157,9 @@ that chat only.
 `set_phase`, `close_task`, `verify_task`, `heartbeat_task`,
 `release_task`, `review_url`, `set_tags`.
 
-`create_ledger` as owner admin mints a ledger-bound write token (once) and
-returns an `mcp` object named `task-ledger-<slug>`. That is the project
-server. Keep the owner admin token in `task-ledger-admin`.
+A ledger-bound **write** token can work tasks. It cannot create ledgers or
+mint tokens. `create_ledger` as owner admin mints a ledger-bound write token
+(once) and returns an `mcp` object named `task-ledger-<slug>`. That is the
+project server. Keep the owner admin token in `task-ledger-admin`.
 
 Resource `ledger://live` is a markdown snapshot. Read-only.

@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose a change to the ledger's behaviour or surface.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The stable surface is listed in docs/versioning.md. Changes to it are
+        weighed against breaking every attached agent, so say what you are
+        trying to do rather than only what to add.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The workflow that is awkward today, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried already
+      description: Existing tools, tags, or a second ledger, and why they fell short.

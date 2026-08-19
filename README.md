@@ -94,8 +94,9 @@ on the body. Create requires `idempotency_key` (JSON or header
 | PATCH | `/v1/:owner/ledgers/:ledger` | Title and DONE retention (admin) |
 | POST | `/v1/:owner/:ledger/reset` | Wipe tasks and restart at T-001 (admin or operator). `confirm` must be `owner/ledger`. |
 | POST | `/v1/:owner/tokens` | Mint a bearer token (admin; plaintext returned once). Optional `email`. |
+| POST | `/v1/review` | Mint a one-time browser review URL (write token; operator refused) |
 | POST | `/v1/:owner/:ledger/tasks` | Create |
-| GET | `/v1/:owner/:ledger/tasks` | List |
+| GET | `/v1/:owner/:ledger/tasks` | List. Query `done=1` or `done=true` for DONE only; `tag=` filters by tag slug |
 | GET | `/v1/:owner/:ledger/tasks/:handle` | Get `T-001` |
 | POST | `/v1/:owner/:ledger/tasks/:handle/claim` | Claim |
 | POST | `/v1/:owner/:ledger/tasks/:handle/heartbeat` | Extend lease |
@@ -103,6 +104,7 @@ on the body. Create requires `idempotency_key` (JSON or header
 | POST | `/v1/:owner/:ledger/tasks/:handle/phase` | Move phase |
 | POST | `/v1/:owner/:ledger/tasks/:handle/notes` | Append note |
 | POST | `/v1/:owner/:ledger/tasks/:handle/checks` | Tick or untick a check |
+| POST | `/v1/:owner/:ledger/tasks/:handle/tags` | Replace tags |
 | POST | `/v1/:owner/:ledger/tasks/:handle/close` | Close (`evidence` required) |
 | POST | `/v1/:owner/:ledger/tasks/:handle/verify` | Refresh verified date |
 | POST | `/v1/:owner/:ledger/next` | Claim the next eligible NOW task |

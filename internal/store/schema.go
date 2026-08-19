@@ -116,10 +116,11 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE TABLE IF NOT EXISTS idempotency (
-  key TEXT PRIMARY KEY,
+  key TEXT NOT NULL,
   ledger_id TEXT NOT NULL,
   task_id TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (ledger_id, key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_ledger_phase_rank ON tasks(ledger_id, phase, rank);

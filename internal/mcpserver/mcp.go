@@ -49,7 +49,11 @@ func bearer(r *http.Request) string {
 }
 
 func newServer(a *app.App, tok types.Token) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "task-ledger", Version: "0.4.0"}, nil)
+	serverVersion := a.Version
+	if serverVersion == "" {
+		serverVersion = "dev"
+	}
+	s := mcp.NewServer(&mcp.Implementation{Name: "task-ledger", Version: serverVersion}, nil)
 	h := &host{app: a, tok: tok}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_ledgers",
@@ -89,7 +93,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.createTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "claim_task",
-		Description: "Claim a task with a lease (default 30 minutes). Returns claim_id once. Keep it in this chat and pass it on heartbeat, re-claim, release, close, and phase while the lease is live. steal=true with a reason takes a live claim from another actor and issues a new claim_id.",
+		Description: "Claim a task with a lease (default 30 minutes). Returns claim_id once. Keep it in this chat and pass it on heartbeat, re-claim, release, close, phase, checks, and tags while the lease is live. steal=true with a reason takes a live claim from another actor and issues a new claim_id.",
 	}, h.claimTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "next_task",
@@ -101,15 +105,15 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.addNote)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_check",
-		Description: "Tick or untick a sub-checkbox. Identify by n (1-based, from get_task) or by exact body text. All checks must be ticked before close_task.",
+		Description: "Tick or untick a sub-checkbox. Identify by n (1-based, from get_task) or by exact body text. All checks must be ticked before close_task. Pass claim_id while a lease is live.",
 	}, h.setCheck)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_tags",
-		Description: "Replace the tags on a task. Pass tags as lowercase slugs, at most three. Empty list clears them. A tag is a filter, not a ledger.",
+		Description: "Replace the tags on a task. Pass tags as lowercase slugs, at most three. Empty list clears them. A tag is a filter, not a ledger. Pass claim_id while a lease is live.",
 	}, h.setTags)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_phase",
-		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. Closing is close_task, not this. Pass claim_id while a lease is live.",
+		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. A fourth deferral is refused unless you pass force. Closing is close_task, not this. Pass claim_id while a lease is live.",
 	}, h.setPhase)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "close_task",
@@ -348,11 +352,6 @@ type toolError struct{ msg string }
 
 func (e *toolError) Error() string { return e.msg }
 
-type scopeIn struct {
-	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
-	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
-}
-
 type listIn struct {
 	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
 	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
@@ -520,12 +519,13 @@ func (h *host) addNote(ctx context.Context, _ *mcp.CallToolRequest, in noteIn) (
 }
 
 type checkIn struct {
-	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
-	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
-	Handle string `json:"handle" jsonschema:"Task handle, for example T-001"`
-	N      int    `json:"n,omitempty" jsonschema:"1-based check index from get_task. Prefer this when body text is not unique."`
-	Body   string `json:"body,omitempty" jsonschema:"Exact check text. Used when n is omitted."`
-	Done   bool   `json:"done" jsonschema:"true to tick, false to untick"`
+	Owner   string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger  string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
+	Handle  string `json:"handle" jsonschema:"Task handle, for example T-001"`
+	N       int    `json:"n,omitempty" jsonschema:"1-based check index from get_task. Prefer this when body text is not unique."`
+	Body    string `json:"body,omitempty" jsonschema:"Exact check text. Used when n is omitted."`
+	Done    bool   `json:"done" jsonschema:"true to tick, false to untick"`
+	ClaimID string `json:"claim_id,omitempty" jsonschema:"Required while a lease is live. Use the claim_id from claim_task or next_task."`
 }
 
 func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -533,7 +533,7 @@ func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn)
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.SetCheck(ctx, h.tok, owner, ledger, in.Handle, in.N, in.Body, in.Done)
+	t, err := h.app.SetCheck(ctx, h.tok, owner, ledger, in.Handle, in.N, in.Body, in.Done, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -541,10 +541,11 @@ func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn)
 }
 
 type tagsIn struct {
-	Owner  string   `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
-	Ledger string   `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
-	Handle string   `json:"handle" jsonschema:"Task handle, for example T-001"`
-	Tags   []string `json:"tags" jsonschema:"Replacement tag slugs, at most three. Empty clears."`
+	Owner   string   `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger  string   `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
+	Handle  string   `json:"handle" jsonschema:"Task handle, for example T-001"`
+	Tags    []string `json:"tags" jsonschema:"Replacement tag slugs, at most three. Empty clears."`
+	ClaimID string   `json:"claim_id,omitempty" jsonschema:"Required while a lease is live. Use the claim_id from claim_task or next_task."`
 }
 
 func (h *host) setTags(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -552,7 +553,7 @@ func (h *host) setTags(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.SetTags(ctx, h.tok, owner, ledger, in.Handle, in.Tags)
+	t, err := h.app.SetTags(ctx, h.tok, owner, ledger, in.Handle, in.Tags, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -672,7 +673,11 @@ func (h *host) readLive(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp
 	if err != nil {
 		return nil, err
 	}
-	body := render.Markdown(l, tasks, "localhost")
+	base := h.app.PublicURL
+	if base == "" {
+		base = "localhost"
+	}
+	body := render.Markdown(l, tasks, base)
 	return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{
 		URI:      req.Params.URI,
 		MIMEType: "text/markdown",

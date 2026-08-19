@@ -36,6 +36,7 @@ type App struct {
 	operator             string
 	Mail                 mail.Sender
 	PublicURL            string
+	Version              string
 	magic                *magicGate
 	ArchiveDoneAfterDays int
 	PurgeDoneAfterDays   int
@@ -401,13 +402,18 @@ func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, hand
 	})
 }
 
-func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, handle string, n int, body string, done bool) (types.Task, error) {
+func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, handle string, n int, body string, done bool, claimID string) (types.Task, error) {
 	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
 	}
 	if t.Phase == types.PhaseDONE {
 		return t, fmt.Errorf("%w: cannot change checks on a closed task", ErrInvalid)
+	}
+	if leaseLive(t, time.Now().UTC()) {
+		if err := leaseHeldElsewhere(t, claimID); err != nil {
+			return t, err
+		}
 	}
 	var id string
 	if n > 0 {
@@ -437,10 +443,15 @@ func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, hand
 	return a.Store.SetCheck(ctx, t.ID, tok.Actor, id, done)
 }
 
-func (a *App) SetTags(ctx context.Context, tok types.Token, owner, ledger, handle string, raw []string) (types.Task, error) {
+func (a *App) SetTags(ctx context.Context, tok types.Token, owner, ledger, handle string, raw []string, claimID string) (types.Task, error) {
 	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
+	}
+	if leaseLive(t, time.Now().UTC()) {
+		if err := leaseHeldElsewhere(t, claimID); err != nil {
+			return t, err
+		}
 	}
 	tags, err := types.NormalizeTags(raw)
 	if err != nil {
@@ -586,11 +597,20 @@ func (a *App) SessionFromAPIToken(ctx context.Context, apiToken string) (types.S
 	if err != nil {
 		return types.Session{}, "", err
 	}
-	role := ""
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok))
+}
+
+// sessionRole carries the token's own role onto the HTML session. Without it
+// every non-operator sign-in looked alike and the board treated a write token
+// as an owner admin.
+func sessionRole(tok types.Token) string {
 	if tok.IsOperator() {
-		role = types.RoleOperator
+		return types.RoleOperator
 	}
-	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, role)
+	if tok.Role == "" {
+		return types.RoleWrite
+	}
+	return tok.Role
 }
 
 func (a *App) Session(ctx context.Context, plain string) (types.Session, error) {

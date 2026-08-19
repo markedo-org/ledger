@@ -18,7 +18,8 @@ and is not the series.
    token, this repo's owner/ledger).
 4. MCP, Streamable HTTP at `/mcp`, over the same domain layer. Copy-paste attach
    path. Not stdio. Not a CLI wrapper. See `docs/mcp.md`.
-5. CLI later, as an HTTP client.
+5. CLI, an HTTP client (`init`, `serve`, `owner`, `ledger`, `token`, `mcp print`,
+   `version`). See `docs/cli.md`.
 
 URLs:
 
@@ -69,7 +70,6 @@ Self-hosters call the same operator routes we will call from
 
 ## Out of v1
 
-- CLI.
 - Folder-watch sync of `TASKS.md` (on-demand markdown export is in).
 - Public read-only ledger (a boolean; v1.1).
 - Browser write form.

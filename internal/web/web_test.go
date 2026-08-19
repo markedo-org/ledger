@@ -216,6 +216,104 @@ func TestHTMLArchiveAndHTTPDone(t *testing.T) {
 	}
 }
 
+// A write token may sign in to read the board, but settings change retention,
+// which deletes work. The HTML path used to promote every session to admin.
+func TestWriteSessionCannotReachLedgerSettings(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	admin, err := a.Auth(context.Background(), tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := a.CreateToken(context.Background(), admin, "markedo", app.CreateTokenInput{
+		Actor: "batty", Ledger: "meta", Role: "write",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, err := web.New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.Handler()
+
+	signIn := func(bearer string) string {
+		req := httptest.NewRequest(http.MethodGet, "/login", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		csrf := cookieVal(rec, "ledger_csrf")
+		form := strings.NewReader("token=" + bearer + "&csrf=" + csrf)
+		req = httptest.NewRequest(http.MethodPost, "/login", form)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: "ledger_csrf", Value: csrf})
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return cookieVal(rec, "ledger_session")
+	}
+
+	write := signIn(issued.Plain)
+	if write == "" {
+		t.Fatal("write token could not open a session")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: write})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("write session should still read the board: %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "/markedo/meta/settings") {
+		t.Fatal("write session must not be offered a settings link")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta/settings", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: write})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("write session opened settings: %d %s", rec.Code, rec.Body.String())
+	}
+
+	vals := url.Values{
+		"csrf":                    {"x"},
+		"title":                   {"Hijacked"},
+		"archive_done_after_days": {"1"},
+		"purge_done_after_days":   {"1"},
+	}
+	req = httptest.NewRequest(http.MethodPost, "/markedo/meta/settings", strings.NewReader(vals.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: write})
+	req.AddCookie(&http.Cookie{Name: "ledger_csrf", Value: "x"})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusSeeOther {
+		t.Fatal("write session saved ledger settings")
+	}
+
+	if admin := signIn(tok); admin == "" {
+		t.Fatal("admin token could not open a session")
+	} else {
+		req = httptest.NewRequest(http.MethodGet, "/markedo/meta/settings", nil)
+		req.AddCookie(&http.Cookie{Name: "ledger_session", Value: admin})
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("admin session lost settings: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestOwnerPageAndLedgerSettings(t *testing.T) {
 	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {

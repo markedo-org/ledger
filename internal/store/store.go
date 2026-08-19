@@ -86,7 +86,49 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("migrate: %s: %w", stmt, err)
 		}
 	}
-	return nil
+	return migrateIdempotencyScope(db)
+}
+
+// The first schema made an idempotency key globally unique, but the replay
+// lookup has always been scoped to one ledger. Two ledgers under one owner
+// using the same key therefore missed the lookup and then collided on the
+// primary key. Rebuild the table on (ledger_id, key).
+func migrateIdempotencyScope(db *sql.DB) error {
+	var ddl string
+	err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'idempotency'`).Scan(&ddl)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if strings.Contains(strings.ReplaceAll(ddl, " ", ""), "PRIMARYKEY(ledger_id,key)") {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, stmt := range []string{
+		`DROP TABLE IF EXISTS idempotency_rebuild`,
+		`CREATE TABLE idempotency_rebuild (
+  key TEXT NOT NULL,
+  ledger_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (ledger_id, key)
+)`,
+		`INSERT OR IGNORE INTO idempotency_rebuild(key, ledger_id, task_id, created_at)
+			SELECT key, ledger_id, task_id, created_at FROM idempotency`,
+		`DROP TABLE idempotency`,
+		`ALTER TABLE idempotency_rebuild RENAME TO idempotency`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate idempotency scope: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 func now() time.Time { return time.Now().UTC().Truncate(time.Second) }

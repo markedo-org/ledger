@@ -20,7 +20,10 @@ func (s *Server) tokenFromSession(c *gin.Context, sess types.Session) (types.Tok
 		tok.Role = types.RoleOperator
 		return tok, nil
 	}
-	tok.Role = types.RoleAdmin
+	tok.Role = sess.Role
+	if tok.Role == "" {
+		tok.Role = types.RoleWrite
+	}
 	o, err := s.App.Store.OwnerBySlug(c.Request.Context(), sess.OwnerSlug)
 	if err != nil {
 		return tok, err
@@ -36,14 +39,19 @@ func (s *Server) tokenFromSession(c *gin.Context, sess types.Session) (types.Tok
 	return tok, nil
 }
 
-// canManageLedger is true for an operator, an owner-wide session, or a
-// session bound to that ledger. An empty ledger means owner-wide only.
+// canManageLedger is true for an operator, an owner-wide admin session, or an
+// admin session bound to that ledger. An empty ledger means owner-wide only.
+// Settings change retention, which deletes work, so a write session is refused
+// here exactly as it is on the REST route.
 func canManageLedger(sess types.Session, ok bool, owner, ledger string) bool {
 	if !ok {
 		return false
 	}
 	if sess.IsOperator() {
 		return true
+	}
+	if sess.Role != types.RoleAdmin {
+		return false
 	}
 	if sess.OwnerSlug != owner {
 		return false

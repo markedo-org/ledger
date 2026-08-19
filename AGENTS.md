@@ -25,7 +25,7 @@ This file is the router. Read linked files when the task needs them.
 
 ## Rules that always apply
 
-1. **The HTTP API is the system.** HTML, the skill, MCP, and a future CLI are
+1. **The HTTP API is the system.** HTML, the skill, MCP, and the CLI are
    clients of the domain layer. Do not put business logic in transport handlers.
 2. **No whole-object writes.** Intent-shaped operations only.
 3. **MCP is Streamable HTTP at `/mcp`.** Same bearer token as the API. Not stdio,

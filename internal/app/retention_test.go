@@ -160,6 +160,38 @@ func TestPurgeDeletesOldDone(t *testing.T) {
 	}
 }
 
+// Tags are a child row like notes and checks. Leaving them behind made the
+// delete hit the foreign key and abort the whole reap.
+func TestPurgeDeletesTaggedDone(t *testing.T) {
+	a, tok := boot(t)
+	a.ArchiveDoneAfterDays = 7
+	a.PurgeDoneAfterDays = 14
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title: "Tagged and done", IdempotencyKey: "ret-tag-1", Tags: []string{"host", "ledger"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done", ""); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := a.Ledger(ctx, tok, "markedo", "meta")
+	if err := a.Store.SetClosedAt(ctx, l.ID, "T-001", time.Now().UTC().AddDate(0, 0, -15)); err != nil {
+		t.Fatal(err)
+	}
+	n, err := a.Reap(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("reap purged %d %v", n, err)
+	}
+	if _, err := a.Get(ctx, tok, "markedo", "meta", "T-001"); err == nil {
+		t.Fatal("purged task still gettable")
+	}
+	tags, err := a.ListLedgerTags(ctx, "markedo", "meta")
+	if err != nil || len(tags) != 0 {
+		t.Fatalf("tags outlived the task: %v %v", tags, err)
+	}
+}
+
 func TestPurgeZeroNeverDeletes(t *testing.T) {
 	a, tok := boot(t)
 	ctx := context.Background()

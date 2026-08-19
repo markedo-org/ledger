@@ -1,4 +1,6 @@
 /ledger
+/bin/
+*.boot-token
 *.db
 *.sqlite
 *.sqlite-shm

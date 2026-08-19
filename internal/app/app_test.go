@@ -121,11 +121,11 @@ func TestCheckMustTickBeforeClose(t *testing.T) {
 	if _, err := a.Close(ctx, tok, "markedo", "meta", task.Handle, "nope", ""); err == nil {
 		t.Fatal("close with unticked checks")
 	}
-	ticked, err := a.SetCheck(ctx, tok, "markedo", "meta", task.Handle, 1, "", true)
+	ticked, err := a.SetCheck(ctx, tok, "markedo", "meta", task.Handle, 1, "", true, "")
 	if err != nil || !ticked.Checks[0].Done || ticked.Checks[1].Done {
 		t.Fatalf("tick 1: %v %+v", err, ticked.Checks)
 	}
-	if _, err := a.SetCheck(ctx, tok, "markedo", "meta", task.Handle, 0, "HTML", true); err != nil {
+	if _, err := a.SetCheck(ctx, tok, "markedo", "meta", task.Handle, 0, "HTML", true, ""); err != nil {
 		t.Fatal(err)
 	}
 	closed, err := a.Close(ctx, tok, "markedo", "meta", task.Handle, "both ticked", "")
@@ -164,7 +164,7 @@ func TestTagsCreateListReplace(t *testing.T) {
 	if err != nil || len(listed) != 1 || listed[0].Handle != task.Handle {
 		t.Fatalf("filter %v %+v", err, listed)
 	}
-	cleared, err := a.SetTags(ctx, tok, "markedo", "meta", task.Handle, nil)
+	cleared, err := a.SetTags(ctx, tok, "markedo", "meta", task.Handle, nil, "")
 	if err != nil || len(cleared.Tags) != 0 {
 		t.Fatalf("clear %v %v", err, cleared.Tags)
 	}
@@ -297,6 +297,90 @@ func TestCreateLedgerMintsProjectTokenForOwnerAdmin(t *testing.T) {
 	}
 	if issued, err := a.MintProjectWrite(ctx, tok, "markedo", l.Slug, ""); err != nil || issued != nil {
 		t.Fatalf("empty actor %v %v", issued, err)
+	}
+}
+
+// A live lease guards the check and tag paths too. Without it a second actor
+// could tick the holder's checks and satisfy the close policy on its behalf.
+func TestLeaseGuardsChecksAndTags(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title: "Guarded", IdempotencyKey: "lease-chk-1", Checks: []string{"review"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	held, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := a.CreateToken(ctx, tok, "markedo", app.CreateTokenInput{Actor: "batty", Ledger: "meta", Role: "write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batty, err := a.Auth(ctx, issued.Plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SetCheck(ctx, batty, "markedo", "meta", "T-001", 1, "", true, ""); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("another actor ticked a leased check: %v", err)
+	}
+	if _, err := a.SetTags(ctx, batty, "markedo", "meta", "T-001", []string{"ledger"}, ""); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("another actor retagged a leased task: %v", err)
+	}
+	ticked, err := a.SetCheck(ctx, tok, "markedo", "meta", "T-001", 1, "", true, held.ClaimID)
+	if err != nil || !ticked.Checks[0].Done {
+		t.Fatalf("holder with claim_id: %v %+v", err, ticked.Checks)
+	}
+	tagged, err := a.SetTags(ctx, tok, "markedo", "meta", "T-001", []string{"ledger"}, held.ClaimID)
+	if err != nil || len(tagged.Tags) != 1 {
+		t.Fatalf("holder retag: %v %v", err, tagged.Tags)
+	}
+	if _, err := a.Release(ctx, tok, "markedo", "meta", "T-001", held.ClaimID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SetCheck(ctx, batty, "markedo", "meta", "T-001", 1, "", false, ""); err != nil {
+		t.Fatalf("once the lease is gone no claim_id is needed: %v", err)
+	}
+}
+
+// One idempotency key means one task per ledger, not one per host. Owners with
+// several ledgers reuse keys like setup-1 on each board.
+func TestIdempotencyKeyIsScopedToOneLedger(t *testing.T) {
+	a, _ := boot(t)
+	ctx := context.Background()
+	a.SetOperatorToken("lgr_op_scope_test")
+	op, err := a.Auth(ctx, "lgr_op_scope_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := a.CreateOwner(ctx, op, app.CreateOwnerInput{
+		Slug: "acme", MaxLedgers: 5, Ledger: "one", Actor: "ada",
+	})
+	if err != nil || created.Token == nil {
+		t.Fatalf("create owner %+v %v", created, err)
+	}
+	ada, err := a.Auth(ctx, created.Token.Plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CreateLedger(ctx, ada, "acme", app.CreateLedgerInput{Slug: "two"}); err != nil {
+		t.Fatal(err)
+	}
+	first, _, err := a.Create(ctx, ada, "acme", "one", app.CreateInput{Title: "On one", IdempotencyKey: "setup-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, replay, err := a.Create(ctx, ada, "acme", "two", app.CreateInput{Title: "On two", IdempotencyKey: "setup-1"})
+	if err != nil {
+		t.Fatalf("same key on a second ledger: %v", err)
+	}
+	if replay || second.Handle != first.Handle {
+		t.Fatalf("second ledger should allocate its own T-001: replay=%v %q %q", replay, first.Handle, second.Handle)
+	}
+	again, replay, err := a.Create(ctx, ada, "acme", "one", app.CreateInput{Title: "Retry", IdempotencyKey: "setup-1"})
+	if err != nil || !replay || again.Title != "On one" {
+		t.Fatalf("retry on the same ledger must replay: %v %v %q", err, replay, again.Title)
 	}
 }
 

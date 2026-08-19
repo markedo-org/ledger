@@ -48,17 +48,19 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 | `ledger serve` | Run the server |
 | `ledger mcp print` | Print Cursor/Claude MCP JSON from the profile. Writes `.cursor/mcp.json` if `.cursor` exists |
 | `ledger mcp print --project-dir PATH` | Write `PATH/.cursor/mcp.json` (creates `.cursor` if needed) |
+| `ledger mcp print --name KEY` | MCP server key in the JSON (default `task-ledger-admin`, or `task-ledger-<ledger>`) |
 | `ledger mcp print --write-cursor` | Write `./.cursor/mcp.json` even if `.cursor` is missing |
 | `ledger mcp print --no-write-cursor` | Print only |
 | `ledger skill` | Print `npx skills add markedo-org/ledger -s task-ledger` (does not run it) |
-| `ledger owner create` | Operator. Optional `--ledger` and `--actor` mint owner admin |
+| `ledger version` | Print version, commit, and build date |
+| `ledger owner create --slug` | Operator. Optional `--max-ledgers`, `--ledger`, `--title`, `--actor`, `--email` mint owner admin |
 | `ledger owner list` | Operator |
 | `ledger owner set-max --max-ledgers N` | Operator. `0` is unlimited |
 | `ledger ledger create --slug` | Owner admin. Mints a bound write token and returns `mcp` |
 | `ledger ledger list` | Owner admin or operator |
 | `ledger ledger set --slug [--title] [--archive-done-after-days N] [--purge-done-after-days N]` | Owner admin. Title and per-ledger DONE retention. `0` means never |
 | `ledger ledger reset --slug --confirm owner/ledger` | Owner admin or operator. Wipes tasks and restarts at T-001. Tokens stay. |
-| `ledger token mint --actor [--ledger] [--role write]` | Owner admin |
+| `ledger token mint --actor [--ledger] [--role write] [--email]` | Owner admin |
 
 `init --write-cursor` also merges the admin MCP server into
 `./.cursor/mcp.json`.
