@@ -109,6 +109,7 @@ type CreateInput struct {
 	Ref            string
 	IdempotencyKey string
 	Checks         []string
+	Tags           []string
 }
 
 func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string, in CreateInput) (types.Task, bool, error) {
@@ -146,6 +147,10 @@ func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string,
 	if !ok {
 		return types.Task{}, false, fmt.Errorf("%w: bad size", ErrInvalid)
 	}
+	tags, err := types.NormalizeTags(in.Tags)
+	if err != nil {
+		return types.Task{}, false, fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+	}
 	task, replay, err := a.Store.CreateTask(ctx, store.CreateTaskParams{
 		LedgerID:       l.ID,
 		Prefix:         prefix,
@@ -157,6 +162,7 @@ func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string,
 		Actor:          tok.Actor,
 		IdempotencyKey: key,
 		Checks:         in.Checks,
+		Tags:           tags,
 	})
 	return task, replay, err
 }
@@ -429,6 +435,29 @@ func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, hand
 		id = matches[0].ID
 	}
 	return a.Store.SetCheck(ctx, t.ID, tok.Actor, id, done)
+}
+
+func (a *App) SetTags(ctx context.Context, tok types.Token, owner, ledger, handle string, raw []string) (types.Task, error) {
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
+	if err != nil {
+		return t, err
+	}
+	tags, err := types.NormalizeTags(raw)
+	if err != nil {
+		return t, fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+	}
+	return a.Store.SetTags(ctx, t.ID, tok.Actor, tags)
+}
+
+func (a *App) ListLedgerTags(ctx context.Context, owner, ledger string) ([]string, error) {
+	l, err := a.Store.ResolveLedger(ctx, owner, ledger)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return a.Store.ListLedgerTags(ctx, l.ID)
 }
 
 func (a *App) AddNote(ctx context.Context, tok types.Token, owner, ledger, handle, body string) (types.Note, error) {

@@ -3,7 +3,7 @@
 <header class="mast">
   <h1 class="brand">{{template "mark"}}<a href="/{{.Owner}}/{{.Ledger}}">{{.Owner}}/{{.Ledger}}</a></h1>
   <div class="meta">{{.Task.Handle}} {{template "appearance"}}</div>
-  <p>{{.Task.Phase}}{{if .Task.Size}} · size {{.Task.Size}}{{end}}</p>
+  <p>{{.Task.Phase}}{{if .Task.Size}} · size {{.Task.Size}}{{end}}{{if .Task.Tags}} · {{range $i, $t := .Task.Tags}}{{if $i}} {{end}}{{$t}}{{end}}{{end}}</p>
 </header>
 {{if .Frozen}}
 <p class="notice freeze">This ledger is read-only. It is newer than this owner's max_ledgers. Writes resume when the cap rises.</p>

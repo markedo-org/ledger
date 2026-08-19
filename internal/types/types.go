@@ -132,6 +132,7 @@ type Task struct {
 	UpdatedAt       time.Time
 	Notes           []Note
 	Checks          []Check
+	Tags            []string
 	DependsOn       []string
 }
 

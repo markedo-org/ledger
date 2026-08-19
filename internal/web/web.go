@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -98,6 +99,7 @@ func (s *Server) Engine() *gin.Engine {
 	v1.POST("/:owner/:ledger/tasks/:handle/phase", s.phase)
 	v1.POST("/:owner/:ledger/tasks/:handle/notes", s.note)
 	v1.POST("/:owner/:ledger/tasks/:handle/checks", s.check)
+	v1.POST("/:owner/:ledger/tasks/:handle/tags", s.tags)
 	v1.POST("/:owner/:ledger/tasks/:handle/close", s.close)
 	v1.POST("/:owner/:ledger/tasks/:handle/verify", s.verify)
 	v1.POST("/:owner/:ledger/next", s.next)
@@ -187,6 +189,7 @@ func taskJSON(t types.Task) gin.H {
 		"evidence":      t.Evidence,
 		"notes":         notes,
 		"checks":        checks,
+		"tags":          append([]string{}, t.Tags...),
 		"depends_on":    append([]string{}, t.DependsOn...),
 		"since":         t.Since.UTC().Format("2006-01-02"),
 	}
@@ -315,6 +318,7 @@ func (s *Server) create(c *gin.Context) {
 		Ref            string   `json:"ref"`
 		IdempotencyKey string   `json:"idempotency_key"`
 		Checks         []string `json:"checks"`
+		Tags           []string `json:"tags"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		s.fail(c, err)
@@ -325,7 +329,7 @@ func (s *Server) create(c *gin.Context) {
 	}
 	t, replay, err := s.App.Create(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), app.CreateInput{
 		Prefix: in.Prefix, Title: in.Title, Body: in.Body, Phase: in.Phase, Size: in.Size,
-		Ref: in.Ref, IdempotencyKey: in.IdempotencyKey, Checks: in.Checks,
+		Ref: in.Ref, IdempotencyKey: in.IdempotencyKey, Checks: in.Checks, Tags: in.Tags,
 	})
 	if err != nil {
 		s.fail(c, err)
@@ -343,8 +347,30 @@ func wantDone(c *gin.Context) bool {
 	return v == "1" || strings.EqualFold(v, "true")
 }
 
+func wantTag(c *gin.Context) string {
+	v := strings.ToLower(strings.TrimSpace(c.Query("tag")))
+	if v == "" || !types.ValidSlug(v) {
+		return ""
+	}
+	return v
+}
+
+func boardQuery(archive bool, tag string) string {
+	var q []string
+	if archive {
+		q = append(q, "done=1")
+	}
+	if tag != "" {
+		q = append(q, "tag="+url.QueryEscape(tag))
+	}
+	if len(q) == 0 {
+		return ""
+	}
+	return "?" + strings.Join(q, "&")
+}
+
 func (s *Server) list(c *gin.Context) {
-	_, tasks, err := s.App.List(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), app.ListQuery{DoneOnly: wantDone(c)})
+	_, tasks, err := s.App.List(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), app.ListQuery{DoneOnly: wantDone(c), Tag: wantTag(c)})
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -477,6 +503,22 @@ func (s *Server) check(c *gin.Context) {
 	c.JSON(http.StatusOK, taskJSON(t))
 }
 
+func (s *Server) tags(c *gin.Context) {
+	var in struct {
+		Tags []string `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		s.fail(c, err)
+		return
+	}
+	t, err := s.App.SetTags(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.Tags)
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, taskJSON(t))
+}
+
 func (s *Server) close(c *gin.Context) {
 	var in struct {
 		Evidence string `json:"evidence"`
@@ -587,7 +629,8 @@ func (s *Server) htmlLedger(c *gin.Context) {
 		return
 	}
 	archive := wantDone(c)
-	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{DoneOnly: archive})
+	tag := wantTag(c)
+	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{DoneOnly: archive, Tag: tag})
 	if err != nil {
 		s.htmlErr(c, err)
 		return
@@ -599,6 +642,7 @@ func (s *Server) htmlLedger(c *gin.Context) {
 	}
 	type row struct {
 		Handle, Title, Meta string
+		Tags                []string
 		Claimed             bool
 	}
 	type phase struct {
@@ -612,7 +656,7 @@ func (s *Server) htmlLedger(c *gin.Context) {
 	by := map[types.Phase][]row{}
 	now := time.Now().UTC()
 	for _, t := range tasks {
-		r := row{Handle: t.Handle, Title: t.Title}
+		r := row{Handle: t.Handle, Title: t.Title, Tags: t.Tags}
 		r.Meta, r.Claimed = boardMeta(t, now)
 		by[t.Phase] = append(by[t.Phase], r)
 	}
@@ -624,6 +668,19 @@ func (s *Server) htmlLedger(c *gin.Context) {
 	if archive {
 		title += " archive"
 	}
+	allTags, err := s.App.ListLedgerTags(c.Request.Context(), owner, ledger)
+	if err != nil {
+		s.htmlErr(c, err)
+		return
+	}
+	type tagLink struct {
+		Slug, Href string
+		On         bool
+	}
+	var tagLinks []tagLink
+	for _, slug := range allTags {
+		tagLinks = append(tagLinks, tagLink{Slug: slug, Href: boardQuery(archive, slug), On: slug == tag})
+	}
 	sess, signedIn := s.sessionFrom(c)
 	data := s.page(c, gin.H{
 		"Title":     title,
@@ -631,6 +688,11 @@ func (s *Server) htmlLedger(c *gin.Context) {
 		"Ledger":    l.Slug,
 		"Frozen":    frozen,
 		"Archive":   archive,
+		"Tag":       tag,
+		"AllHref":   boardQuery(archive, ""),
+		"BoardHref": "/" + l.OwnerSlug + "/" + l.Slug + boardQuery(false, tag),
+		"DoneHref":  "/" + l.OwnerSlug + "/" + l.Slug + boardQuery(true, tag),
+		"TagLinks":  tagLinks,
 		"Phases":    phases,
 		"CanManage": canManageLedger(sess, signedIn, l.OwnerSlug, l.Slug),
 	})

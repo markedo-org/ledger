@@ -49,6 +49,9 @@ func Markdown(l types.Ledger, tasks []types.Task, host string) string {
 				if t.Ref != "" {
 					fmt.Fprintf(&b, " · ref `%s`", t.Ref)
 				}
+				if len(t.Tags) > 0 {
+					fmt.Fprintf(&b, " · tags %s", strings.Join(t.Tags, " "))
+				}
 				b.WriteString("\n")
 			}
 			if t.ClaimedBy != "" && t.ClaimedUntil != nil && t.ClaimedUntil.After(now) {

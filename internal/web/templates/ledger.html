@@ -6,9 +6,9 @@
     · <a href="/{{.Owner}}">Owner</a>
     {{if .CanManage}}· <a href="/{{.Owner}}/{{.Ledger}}/settings">Settings</a>{{end}}
     {{if .Archive}}
-    · <a href="/{{.Owner}}/{{.Ledger}}">Board</a>
+    · <a href="{{.BoardHref}}">Board</a>
     {{else}}
-    · <a href="/{{.Owner}}/{{.Ledger}}?done=1">Archive</a>
+    · <a href="{{.DoneHref}}">Archive</a>
     {{end}}
   </div>
   {{if .Archive}}
@@ -21,18 +21,29 @@
 {{if .Frozen}}
 <p class="notice freeze">This ledger is read-only. It is newer than this owner's max_ledgers. Writes resume when the cap rises.</p>
 {{end}}
+{{if .TagLinks}}
+<nav class="tag-nav" aria-label="Tags">
+  <a href="{{.AllHref}}"{{if not .Tag}} class="on"{{end}}>all</a>
+  {{range .TagLinks}}
+  <a href="{{.Href}}"{{if .On}} class="on"{{end}}>{{.Slug}}</a>
+  {{end}}
+</nav>
+{{end}}
 {{range .Phases}}
   <h2 class="phase">{{.Name}}</h2>
   {{if .Tasks}}
   <ol class="register">
     {{range .Tasks}}
     <li class="{{if .Claimed}}claimed{{end}}">
-      <a class="row" href="/{{$.Owner}}/{{$.Ledger}}/{{.Handle}}">
+      <a class="row{{if .Tags}} tagged{{end}}" href="/{{$.Owner}}/{{$.Ledger}}/{{.Handle}}">
         <span class="handle">{{.Handle}}</span>
         <span class="row-main">
           <span class="title">{{.Title}}</span>
           {{if .Meta}}<span class="row-meta">{{.Meta}}</span>{{end}}
         </span>
+        {{if .Tags}}
+        <span class="row-tags">{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</span>
+        {{end}}
       </a>
     </li>
     {{end}}

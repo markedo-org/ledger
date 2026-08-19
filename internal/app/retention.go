@@ -19,6 +19,7 @@ const (
 
 type ListQuery struct {
 	DoneOnly bool
+	Tag      string
 }
 
 func ValidateRetention(archiveDays, purgeDays int) error {
@@ -78,7 +79,11 @@ func (a *App) EffectiveRetention(l types.Ledger) (archiveDays, purgeDays int) {
 }
 
 func (a *App) taskList(l types.Ledger, q ListQuery) store.TaskList {
-	out := store.TaskList{DoneOnly: q.DoneOnly}
+	tag := strings.ToLower(strings.TrimSpace(q.Tag))
+	if tag != "" && !types.ValidSlug(tag) {
+		tag = ""
+	}
+	out := store.TaskList{DoneOnly: q.DoneOnly, Tag: tag}
 	if q.DoneOnly {
 		return out
 	}

@@ -75,6 +75,12 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE ledgers ADD COLUMN archive_done_after_days INTEGER`,
 		`ALTER TABLE ledgers ADD COLUMN purge_done_after_days INTEGER`,
 		`ALTER TABLE tasks ADD COLUMN claim_id_hash TEXT`,
+		`CREATE TABLE IF NOT EXISTS task_tags (
+  task_id TEXT NOT NULL REFERENCES tasks(id),
+  slug TEXT NOT NULL,
+  rank INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (task_id, slug)
+)`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("migrate: %s: %w", stmt, err)
@@ -228,6 +234,7 @@ type CreateTaskParams struct {
 	Actor          string
 	IdempotencyKey string
 	Checks         []string
+	Tags           []string
 }
 
 func (s *Store) CreateTask(ctx context.Context, p CreateTaskParams) (types.Task, bool, error) {
@@ -284,6 +291,9 @@ func (s *Store) CreateTask(ctx context.Context, p CreateTaskParams) (types.Task,
 				return err
 			}
 		}
+		if err := replaceTagsTx(ctx, tx, id, p.Tags); err != nil {
+			return err
+		}
 		payload, _ := json.Marshal(map[string]any{"handle": handle, "title": p.Title})
 		if _, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
 			p.LedgerID, id, p.Actor, "create", string(payload), fmtTime(t)); err != nil {
@@ -335,6 +345,10 @@ func (s *Store) ListTasks(ctx context.Context, ledgerID string, q TaskList) ([]t
 	} else if q.ArchiveBefore != nil {
 		query += ` AND (phase != 'DONE' OR closed_at IS NULL OR closed_at >= ?)`
 		args = append(args, fmtTime(*q.ArchiveBefore))
+	}
+	if q.Tag != "" {
+		query += ` AND EXISTS (SELECT 1 FROM task_tags g WHERE g.task_id = tasks.id AND g.slug = ?)`
+		args = append(args, q.Tag)
 	}
 	query += ` ORDER BY
 		CASE phase WHEN 'NOW' THEN 0 WHEN 'NEXT' THEN 1 WHEN 'LATER' THEN 2 WHEN 'GATED' THEN 3 WHEN 'PARKED' THEN 4 WHEN 'DONE' THEN 5 ELSE 9 END,
@@ -435,6 +449,19 @@ func getTaskTx(ctx context.Context, tx *sql.Tx, id string) (types.Task, error) {
 		}
 		c.Done = done != 0
 		t.Checks = append(t.Checks, c)
+	}
+
+	gRows, err := tx.QueryContext(ctx, `SELECT slug FROM task_tags WHERE task_id = ? ORDER BY rank ASC, slug ASC`, id)
+	if err != nil {
+		return t, err
+	}
+	defer gRows.Close()
+	for gRows.Next() {
+		var slug string
+		if err := gRows.Scan(&slug); err != nil {
+			return t, err
+		}
+		t.Tags = append(t.Tags, slug)
 	}
 
 	dRows, err := tx.QueryContext(ctx, `SELECT t.handle FROM deps d JOIN tasks t ON t.id = d.depends_on WHERE d.task_id = ?`, id)

@@ -507,3 +507,64 @@ func TestMCPReviewURL(t *testing.T) {
 		t.Fatal("bearer token leaked into review_url result")
 	}
 }
+
+func TestMCPTags(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	httpSrv := httptest.NewServer(mcpserver.Handler(app.New(s)))
+	t.Cleanup(httpSrv.Close)
+	ctx := context.Background()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v0.1.0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   httpSrv.URL,
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: tok}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	created, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"title":           "Tagged",
+			"idempotency_key": "mcp-tag-1",
+			"tags":            []string{"ledger"},
+		},
+	})
+	if err != nil || created.IsError {
+		t.Fatalf("create %v %+v", err, created)
+	}
+	raw, _ := json.Marshal(created.StructuredContent)
+	if !strings.Contains(string(raw), `"ledger"`) {
+		t.Fatalf("create missing tag: %s", raw)
+	}
+	listed, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "list_tasks",
+		Arguments: map[string]any{"tag": "ledger"},
+	})
+	if err != nil || listed.IsError {
+		t.Fatalf("list %v %+v", err, listed)
+	}
+	raw, _ = json.Marshal(listed.StructuredContent)
+	if !strings.Contains(string(raw), "T-001") {
+		t.Fatalf("list filter: %s", raw)
+	}
+	replaced, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "set_tags",
+		Arguments: map[string]any{"handle": "T-001", "tags": []string{"site"}},
+	})
+	if err != nil || replaced.IsError {
+		t.Fatalf("set_tags %v %+v", err, replaced)
+	}
+}

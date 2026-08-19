@@ -92,6 +92,13 @@ CREATE TABLE IF NOT EXISTS checks (
   rank INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS task_tags (
+  task_id TEXT NOT NULL REFERENCES tasks(id),
+  slug TEXT NOT NULL,
+  rank INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (task_id, slug)
+);
+
 CREATE TABLE IF NOT EXISTS deps (
   task_id TEXT NOT NULL REFERENCES tasks(id),
   depends_on TEXT NOT NULL REFERENCES tasks(id),

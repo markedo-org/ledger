@@ -134,6 +134,46 @@ func TestCheckMustTickBeforeClose(t *testing.T) {
 	}
 }
 
+func TestTagsCreateListReplace(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title: "No tags", IdempotencyKey: "tag-0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	task, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title:          "Ledger work",
+		IdempotencyKey: "tag-1",
+		Tags:           []string{"Ledger", "site", "ledger"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Tags) != 2 || task.Tags[0] != "ledger" || task.Tags[1] != "site" {
+		t.Fatalf("create tags %v", task.Tags)
+	}
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title:          "Too many",
+		IdempotencyKey: "tag-4",
+		Tags:           []string{"a", "b", "c", "d"},
+	}); err == nil {
+		t.Fatal("want max 3")
+	}
+	_, listed, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{Tag: "ledger"})
+	if err != nil || len(listed) != 1 || listed[0].Handle != task.Handle {
+		t.Fatalf("filter %v %+v", err, listed)
+	}
+	cleared, err := a.SetTags(ctx, tok, "markedo", "meta", task.Handle, nil)
+	if err != nil || len(cleared.Tags) != 0 {
+		t.Fatalf("clear %v %v", err, cleared.Tags)
+	}
+	got, err := a.ListLedgerTags(ctx, "markedo", "meta")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("ledger tags after clear %v %v", err, got)
+	}
+}
+
 func TestDeferralPolicy(t *testing.T) {
 	a, tok := boot(t)
 	ctx := context.Background()

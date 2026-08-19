@@ -403,3 +403,75 @@ func TestReviewURLHTTP(t *testing.T) {
 		t.Fatalf("board %d", rec.Code)
 	}
 }
+
+func TestHTMLTagsFilter(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	auth, err := a.Auth(context.Background(), tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.Create(context.Background(), auth, "markedo", "meta", app.CreateInput{
+		Title: "Trackveil work", IdempotencyKey: "html-tag-1", Tags: []string{"trackveil"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.Create(context.Background(), auth, "markedo", "meta", app.CreateInput{
+		Title: "Finance work", IdempotencyKey: "html-tag-2", Tags: []string{"finance"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := web.New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	page := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(page, `class="row-tags"`) || !strings.Contains(page, ">trackveil<") {
+		t.Fatalf("board chips: %d %s", rec.Code, page)
+	}
+	if !strings.Contains(page, `href="?tag=trackveil"`) {
+		t.Fatalf("tag nav missing: %s", page)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta?tag=trackveil", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	page = rec.Body.String()
+	if !strings.Contains(page, "Trackveil work") || strings.Contains(page, "Finance work") {
+		t.Fatalf("filter: %s", page)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/markedo/meta/tasks?tag=finance", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Finance work") || strings.Contains(rec.Body.String(), "Trackveil work") {
+		t.Fatalf("http filter %d %s", rec.Code, rec.Body.String())
+	}
+
+	body := bytes.NewBufferString(`{"tags":["host"]}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks/T-001/tags", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"host"`) {
+		t.Fatalf("set tags %d %s", rec.Code, rec.Body.String())
+	}
+}

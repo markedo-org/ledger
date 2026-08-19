@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.9
+
+Optional tags on tasks: at most three lowercase slugs. Set on create,
+replace with `set_tags`. `list_tasks` and the HTML board filter by one
+tag. Chips sit on the right of each row. A tag is a filter, not a ledger.
+
 ## 0.15.8
 
 Ledger settings is its own form: sentence-case labels, grouped fields,

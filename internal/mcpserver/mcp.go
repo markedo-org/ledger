@@ -73,7 +73,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.setMaxLedgers)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_tasks",
-		Description: "List tasks in a ledger (handle, title, phase, size, claimant). Thin index only: get_task before you act. Default list hides DONE older than archive_done_after_days (7 unless the ledger overrides). Pass done=true for every DONE task, and only those. get_task still loads a hidden handle. Do not delete DONE tasks.",
+		Description: "List tasks in a ledger (handle, title, phase, size, tags, claimant). Thin index only: get_task before you act. Default list hides DONE older than archive_done_after_days (7 unless the ledger overrides). Pass done=true for every DONE task, and only those. Pass tag to keep tasks with that slug. get_task still loads a hidden handle. Do not delete DONE tasks.",
 	}, h.listTasks)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_task",
@@ -81,7 +81,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.getTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_task",
-		Description: "Create a task. Allocates the next handle in the series (default T). Always send idempotency_key. Does not claim the task.",
+		Description: "Create a task. Allocates the next handle in the series (default T). Always send idempotency_key. Optional tags: at most three lowercase slugs. Does not claim the task.",
 	}, h.createTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "claim_task",
@@ -99,6 +99,10 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Name:        "set_check",
 		Description: "Tick or untick a sub-checkbox. Identify by n (1-based, from get_task) or by exact body text. All checks must be ticked before close_task.",
 	}, h.setCheck)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "set_tags",
+		Description: "Replace the tags on a task. Pass tags as lowercase slugs, at most three. Empty list clears them. A tag is a filter, not a ledger.",
+	}, h.setTags)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_phase",
 		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. Closing is close_task, not this. Pass claim_id while a lease is live.",
@@ -324,6 +328,7 @@ type listIn struct {
 	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
 	Ledger string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
 	Done   bool   `json:"done,omitempty" jsonschema:"If true, list every DONE task and only DONE tasks. Default list hides DONE older than archive_done_after_days."`
+	Tag    string `json:"tag,omitempty" jsonschema:"Keep tasks that have this tag slug. One tag only."`
 }
 
 type listOut struct {
@@ -333,16 +338,17 @@ type listOut struct {
 }
 
 type taskBrief struct {
-	Handle    string `json:"handle"`
-	Title     string `json:"title"`
-	Phase     string `json:"phase"`
-	Size      string `json:"size,omitempty"`
-	ClaimedBy string `json:"claimed_by,omitempty"`
-	Pushed    int    `json:"pushed,omitempty"`
+	Handle    string   `json:"handle"`
+	Title     string   `json:"title"`
+	Phase     string   `json:"phase"`
+	Size      string   `json:"size,omitempty"`
+	ClaimedBy string   `json:"claimed_by,omitempty"`
+	Pushed    int      `json:"pushed,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
 }
 
 func brief(t types.Task) taskBrief {
-	b := taskBrief{Handle: t.Handle, Title: t.Title, Phase: string(t.Phase), Size: string(t.Size), Pushed: t.Pushed}
+	b := taskBrief{Handle: t.Handle, Title: t.Title, Phase: string(t.Phase), Size: string(t.Size), Pushed: t.Pushed, Tags: t.Tags}
 	if t.ClaimedBy != "" && t.ClaimedUntil != nil && t.ClaimedUntil.After(time.Now().UTC()) {
 		b.ClaimedBy = t.ClaimedBy
 	}
@@ -354,7 +360,7 @@ func (h *host) listTasks(ctx context.Context, _ *mcp.CallToolRequest, in listIn)
 	if err != nil {
 		return nil, listOut{}, err
 	}
-	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{DoneOnly: in.Done})
+	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{DoneOnly: in.Done, Tag: strings.ToLower(strings.TrimSpace(in.Tag))})
 	if err != nil {
 		return nil, listOut{}, err
 	}
@@ -394,6 +400,7 @@ type createIn struct {
 	Ref            string   `json:"ref,omitempty" jsonschema:"Pointer to a detail doc"`
 	IdempotencyKey string   `json:"idempotency_key" jsonschema:"Required. Agents retry; this prevents duplicate IDs."`
 	Checks         []string `json:"checks,omitempty" jsonschema:"Optional sub-checkboxes, not separate tasks"`
+	Tags           []string `json:"tags,omitempty" jsonschema:"Optional filter slugs, at most three. Same charset as owner slugs."`
 }
 
 func (h *host) createTask(ctx context.Context, _ *mcp.CallToolRequest, in createIn) (*mcp.CallToolResult, map[string]any, error) {
@@ -403,7 +410,7 @@ func (h *host) createTask(ctx context.Context, _ *mcp.CallToolRequest, in create
 	}
 	t, _, err := h.app.Create(ctx, h.tok, owner, ledger, app.CreateInput{
 		Prefix: in.Prefix, Title: in.Title, Body: in.Body, Phase: in.Phase, Size: in.Size,
-		Ref: in.Ref, IdempotencyKey: in.IdempotencyKey, Checks: in.Checks,
+		Ref: in.Ref, IdempotencyKey: in.IdempotencyKey, Checks: in.Checks, Tags: in.Tags,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -498,6 +505,25 @@ func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn)
 		return nil, nil, err
 	}
 	t, err := h.app.SetCheck(ctx, h.tok, owner, ledger, in.Handle, in.N, in.Body, in.Done)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, taskMap(t), nil
+}
+
+type tagsIn struct {
+	Owner  string   `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger string   `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
+	Handle string   `json:"handle" jsonschema:"Task handle, for example T-001"`
+	Tags   []string `json:"tags" jsonschema:"Replacement tag slugs, at most three. Empty clears."`
+}
+
+func (h *host) setTags(ctx context.Context, _ *mcp.CallToolRequest, in tagsIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, ledger, err := h.scope(ctx, in.Owner, in.Ledger)
+	if err != nil {
+		return nil, nil, err
+	}
+	t, err := h.app.SetTags(ctx, h.tok, owner, ledger, in.Handle, in.Tags)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -649,6 +675,7 @@ func taskMap(t types.Task) map[string]any {
 		"evidence":   t.Evidence,
 		"ref":        t.Ref,
 		"checks":     checks,
+		"tags":       append([]string{}, t.Tags...),
 		"notes":      notes,
 	}
 	if t.VerifiedAt != nil {

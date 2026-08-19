@@ -57,7 +57,7 @@ See `.agents/skills/task-ledger/`.
 `list_ledgers`, `create_ledger`, `create_token`, `create_owner`,
 `set_max_ledgers`, `list_tasks`, `get_task`, `create_task`, `claim_task`,
 `next_task`, `add_note`, `set_check`, `set_phase`, `close_task`,
-`verify_task`, `heartbeat_task`, `release_task`, `review_url`.
+`verify_task`, `heartbeat_task`, `release_task`, `review_url`, `set_tags`.
 
 `create_owner` and `set_max_ledgers` need the operator token
 (`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` accept owner
@@ -77,6 +77,10 @@ recover-my-own-lease path.
 `review_url` returns a one-time URL (`GET /login/review?code=`). Open it in
 a browser for the human. Do not paste the bearer token. Do not put the URL
 in a task note. Write tokens may mint. The operator secret cannot.
+
+`create_task` accepts optional `tags` (at most three lowercase slugs).
+`set_tags` replaces them. `list_tasks` accepts `tag` to keep tasks with
+that slug. A tag is a filter, not a ledger.
 
 `list_tasks` hides DONE older than `archive_done_after_days` (process default
 7, or the ledger override). Pass `done: true` for every DONE task, and only

@@ -13,6 +13,7 @@ const ledgerCols = `l.id, l.owner_id, o.slug, l.slug, l.title, l.created_at, l.a
 
 type TaskList struct {
 	DoneOnly      bool
+	Tag           string
 	ArchiveBefore *time.Time // hide DONE closed before this; nil keeps all DONE
 }
 

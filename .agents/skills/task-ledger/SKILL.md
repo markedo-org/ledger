@@ -44,10 +44,17 @@ Two setups:
    token, in a server named for that project. Do not give it the owner
    admin token.
 
-`list_tasks` is a thin index (handle, title, phase, size, claimant).
+`list_tasks` is a thin index (handle, title, phase, size, tags, claimant).
 Default list hides DONE older than the ledger's archive window. Pass
-`done=true` for every DONE task, and only those. `get_task` still works
-on a hidden handle. Do not delete DONE tasks.
+`done=true` for every DONE task, and only those. Pass `tag` to keep tasks
+with that slug. `get_task` still works on a hidden handle. Do not delete
+DONE tasks.
+
+On a mixed-purpose board (one ledger covering several products or hats),
+set tags on create (`ledger`, `site`, `finance`). At most three lowercase
+slugs, same charset as owner slugs. Filter with `list_tasks` `tag=` or
+the HTML `?tag=` chips. Change later with `set_tags`. A tag is a filter,
+not a ledger: isolation still means a ledger-bound token.
 
 HTML `/login` is for humans. Agents use the bearer token, not the session
 cookie.
@@ -98,7 +105,8 @@ that chat only.
 `list_ledgers`, `create_ledger`, `create_token` (admin), `create_owner` and
 `set_max_ledgers` (operator), `list_tasks`, `get_task`, `create_task`,
 `claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
-`close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`.
+`close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`,
+`set_tags`.
 
 `create_ledger` as owner admin mints a ledger-bound write token (once) and
 returns an `mcp` object named `task-ledger-<slug>`. That is the project
