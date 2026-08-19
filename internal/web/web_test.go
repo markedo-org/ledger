@@ -295,8 +295,15 @@ func TestOwnerPageAndLedgerSettings(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: sess})
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "The meta board") {
-		t.Fatalf("settings get %d %s", rec.Code, rec.Body.String())
+	page = rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(page, "The meta board") {
+		t.Fatalf("settings get %d %s", rec.Code, page)
+	}
+	if !strings.Contains(page, `<form class="settings"`) || strings.Contains(page, `form.signin`) || strings.Contains(page, `class="signin`) {
+		t.Fatalf("settings should use form.settings, not signin: %s", page)
+	}
+	if !strings.Contains(page, "<fieldset>") || !strings.Contains(page, "Retention") {
+		t.Fatalf("settings missing retention group: %s", page)
 	}
 	csrf = cookieVal(rec, "ledger_csrf")
 	if csrf == "" {

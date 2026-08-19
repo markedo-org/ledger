@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.8
+
+Ledger settings is its own form: sentence-case labels, grouped fields,
+day inputs with a unit, and a darker field well so the page reads in
+dark theme. Login `form.signin` is unchanged.
+
 ## 0.15.7
 
 `review_url` (MCP) and `POST /v1/review` mint a one-time, 15-minute code.

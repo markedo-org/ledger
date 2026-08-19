@@ -9,6 +9,8 @@
   --claim: #0d9488;
   --hover: #e4ebe6;
   --input: #eef2ee;
+  --field: #ffffff;
+  --field-line: #8a9b88;
   --font-display: "Archivo Narrow", "Arial Narrow", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
@@ -24,6 +26,8 @@
     --claim: #14b8a6;
     --hover: #1a2620;
     --input: #1a2620;
+    --field: #0c1210;
+    --field-line: #4a5d50;
   }
 }
 
@@ -36,6 +40,8 @@ html[data-theme="dark"] {
   --claim: #14b8a6;
   --hover: #1a2620;
   --input: #1a2620;
+  --field: #0c1210;
+  --field-line: #4a5d50;
 }
 
 html[data-theme="light"] {
@@ -115,7 +121,93 @@ header.mast p {
   white-space: nowrap;
 }
 .tune:hover { color: var(--claim); }
-form.settings { max-width: 28rem; }
+
+.flash {
+  margin: -0.35rem 0 1.5rem;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--claim);
+  border-left: 3px solid var(--claim);
+  background: color-mix(in srgb, var(--claim) 10%, var(--paper));
+}
+
+form.settings {
+  max-width: 32rem;
+  margin: 0 0 2.25rem;
+}
+form.settings .field {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0 0 1.55rem;
+}
+form.settings fieldset {
+  margin: 0 0 1.75rem;
+  padding: 1.15rem 0 0;
+  border: 0;
+  border-top: 1px dotted var(--rule);
+}
+form.settings legend {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+  padding: 0 0.45rem 0 0;
+}
+form.settings label {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+form.settings .hint {
+  margin: 0;
+  max-width: 28rem;
+}
+form.settings input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--field-line);
+  background: var(--field);
+  color: var(--ink);
+}
+form.settings .field-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+form.settings .field-days input {
+  width: 6.75rem;
+}
+form.settings .unit {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--mute);
+}
+form.settings button {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  padding: 0.55rem 1.15rem;
+  cursor: pointer;
+}
+form.settings button:hover {
+  background: var(--claim);
+  color: var(--paper);
+}
+form.settings + .mast-actions {
+  margin-top: 0;
+}
+
 .brand {
   display: flex;
   align-items: center;
