@@ -475,3 +475,74 @@ func TestHTMLTagsFilter(t *testing.T) {
 		t.Fatalf("set tags %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestResetLedgerHTTP(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	srv, err := web.New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := srv.Handler()
+
+	body := bytes.NewBufferString(`{"title":"Old","idempotency_key":"rst-http-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rec.Code, rec.Body.String())
+	}
+
+	auth, err := a.Auth(context.Background(), tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := a.CreateToken(context.Background(), auth, "markedo", app.CreateTokenInput{
+		Actor: "bot", Ledger: "meta", Role: "write",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = bytes.NewBufferString(`{"confirm":"markedo/meta"}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/reset", body)
+	req.Header.Set("Authorization", "Bearer "+issued.Plain)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("write reset %d %s", rec.Code, rec.Body.String())
+	}
+
+	body = bytes.NewBufferString(`{"confirm":"markedo/meta"}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/reset", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"tasks_deleted":1`) {
+		t.Fatalf("reset %d %s", rec.Code, rec.Body.String())
+	}
+
+	body = bytes.NewBufferString(`{"title":"New","idempotency_key":"rst-http-2"}`)
+	req = httptest.NewRequest(http.MethodPost, "/v1/markedo/meta/tasks", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"T-001"`) {
+		t.Fatalf("create after reset %d %s", rec.Code, rec.Body.String())
+	}
+}

@@ -147,11 +147,12 @@ that chat only.
 
 ## Tools
 
-`list_ledgers`, `create_ledger`, `create_token` (admin), `create_owner` and
-`set_max_ledgers` (operator), `list_tasks`, `get_task`, `create_task`,
-`claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
-`close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`,
-`set_tags`.
+`list_ledgers`, `create_ledger`, `create_token` (admin), `reset_ledger`
+(admin or operator; `confirm` must be `owner/ledger`; irreversible),
+`create_owner` and `set_max_ledgers` (operator), `list_tasks`, `get_task`,
+`create_task`, `claim_task`, `next_task`, `add_note`, `set_check`,
+`set_phase`, `close_task`, `verify_task`, `heartbeat_task`,
+`release_task`, `review_url`, `set_tags`.
 
 `create_ledger` as owner admin mints a ledger-bound write token (once) and
 returns an `mcp` object named `task-ledger-<slug>`. That is the project

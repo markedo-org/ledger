@@ -568,3 +568,67 @@ func TestMCPTags(t *testing.T) {
 		t.Fatalf("set_tags %v %+v", err, replaced)
 	}
 }
+
+func TestMCPResetLedger(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "iq", "abusemanager", "ada", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	httpSrv := httptest.NewServer(mcpserver.Handler(a))
+	t.Cleanup(httpSrv.Close)
+	ctx := context.Background()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v0.1.0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   httpSrv.URL,
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: tok}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	created, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"title":           "Old work",
+			"idempotency_key": "mcp-rst-1",
+		},
+	})
+	if err != nil || created.IsError {
+		t.Fatalf("create %v %+v", err, created)
+	}
+	reset, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "reset_ledger",
+		Arguments: map[string]any{"confirm": "iq/abusemanager"},
+	})
+	if err != nil || reset.IsError {
+		t.Fatalf("reset_ledger %v %+v", err, reset)
+	}
+	raw, _ := json.Marshal(reset.StructuredContent)
+	if !strings.Contains(string(raw), `"tasks_deleted":1`) {
+		t.Fatalf("reset payload %s", raw)
+	}
+	again, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "create_task",
+		Arguments: map[string]any{
+			"title":           "Start over",
+			"idempotency_key": "mcp-rst-2",
+		},
+	})
+	if err != nil || again.IsError {
+		t.Fatalf("create after reset %v %+v", err, again)
+	}
+	raw, _ = json.Marshal(again.StructuredContent)
+	if !strings.Contains(string(raw), `"T-001"`) {
+		t.Fatalf("expected T-001: %s", raw)
+	}
+}

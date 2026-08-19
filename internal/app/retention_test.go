@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -196,6 +197,95 @@ func TestPatchLedgerTitle(t *testing.T) {
 	long := strings.Repeat("x", app.MaxLedgerTitle+1)
 	if _, err := a.PatchLedger(ctx, tok, "markedo", "meta", &long, nil, nil); err == nil {
 		t.Fatal("overlong title")
+	}
+}
+
+func TestResetLedgerRestartsSeries(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title: "First", IdempotencyKey: "rst-1", Tags: []string{"host"}, Checks: []string{"one"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title: "Second", IdempotencyKey: "rst-2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.ResetLedger(ctx, tok, "markedo", "meta", "wrong"); err == nil {
+		t.Fatal("bad confirm")
+	}
+	l, n, err := a.ResetLedger(ctx, tok, "markedo", "meta", "markedo/meta")
+	if err != nil || n != 2 || l.Slug != "meta" {
+		t.Fatalf("reset %#v n=%d %v", l, n, err)
+	}
+	_, board, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
+	if err != nil || len(board) != 0 {
+		t.Fatalf("board after reset: %d %v", len(board), err)
+	}
+	_, archived, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
+	if err != nil || len(archived) != 0 {
+		t.Fatalf("archive after reset: %d %v", len(archived), err)
+	}
+	again, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{
+		Title: "Fresh start", IdempotencyKey: "rst-1",
+	})
+	if err != nil || again.Handle != "T-001" {
+		t.Fatalf("next handle %#v %v", again.Handle, err)
+	}
+}
+
+func TestResetLedgerWriteForbidden(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	issued, err := a.CreateToken(ctx, tok, "markedo", app.CreateTokenInput{
+		Actor: "bot", Ledger: "meta", Role: "write",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	write, err := a.Auth(ctx, issued.Plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.ResetLedger(ctx, write, "markedo", "meta", "markedo/meta"); !errors.Is(err, app.ErrForbidden) {
+		t.Fatalf("write reset %v", err)
+	}
+}
+
+func TestResetLedgerOperator(t *testing.T) {
+	a, _ := boot(t)
+	a.SetOperatorToken("lgr_operator_reset")
+	ctx := context.Background()
+	op, err := a.Auth(ctx, "lgr_operator_reset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := a.CreateOwner(ctx, op, app.CreateOwnerInput{
+		Slug: "iq", Ledger: "abusemanager", Actor: "ada",
+	})
+	if err != nil || created.Token == nil {
+		t.Fatalf("owner %+v %v", created, err)
+	}
+	ada, err := a.Auth(ctx, created.Token.Plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.Create(ctx, ada, "iq", "abusemanager", app.CreateInput{
+		Title: "Old work", IdempotencyKey: "iq-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, n, err := a.ResetLedger(ctx, op, "iq", "abusemanager", "iq/abusemanager")
+	if err != nil || n != 1 {
+		t.Fatalf("operator reset n=%d %v", n, err)
+	}
+	fresh, _, err := a.Create(ctx, ada, "iq", "abusemanager", app.CreateInput{
+		Title: "Start over", IdempotencyKey: "iq-1",
+	})
+	if err != nil || fresh.Handle != "T-001" {
+		t.Fatalf("after operator reset %#v %v", fresh.Handle, err)
 	}
 }
 

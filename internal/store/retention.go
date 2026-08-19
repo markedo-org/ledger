@@ -162,6 +162,46 @@ func (s *Store) PurgeDoneBefore(ctx context.Context, ledgerID string, before tim
 	return n, err
 }
 
+// ResetLedger deletes every task on the ledger (and child rows), clears
+// ledger-scoped events and idempotency keys, and sets every series next_n
+// back to 1. Tokens, the ledger row, and the owner stay. Writes one reset
+// event so the wipe is visible in the log.
+func (s *Store) ResetLedger(ctx context.Context, ledgerID, actor string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE ledger_id = ?`, ledgerID).Scan(&n); err != nil {
+			return err
+		}
+		for _, q := range []string{
+			`DELETE FROM task_tags WHERE task_id IN (SELECT id FROM tasks WHERE ledger_id = ?)`,
+			`DELETE FROM notes WHERE task_id IN (SELECT id FROM tasks WHERE ledger_id = ?)`,
+			`DELETE FROM checks WHERE task_id IN (SELECT id FROM tasks WHERE ledger_id = ?)`,
+			`DELETE FROM idempotency WHERE ledger_id = ?`,
+			`DELETE FROM events WHERE ledger_id = ?`,
+		} {
+			if _, err := tx.ExecContext(ctx, q, ledgerID); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM deps WHERE task_id IN (SELECT id FROM tasks WHERE ledger_id = ?) OR depends_on IN (SELECT id FROM tasks WHERE ledger_id = ?)`, ledgerID, ledgerID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE ledger_id = ?`, ledgerID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE series SET next_n = 1 WHERE ledger_id = ?`, ledgerID); err != nil {
+			return err
+		}
+		payload, _ := json.Marshal(map[string]int{"tasks_deleted": n})
+		_, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
+			ledgerID, nil, actor, "reset", string(payload), fmtTime(now()))
+		return err
+	})
+	return n, err
+}
+
 func nullInt(p *int) any {
 	if p == nil {
 		return nil

@@ -98,6 +98,41 @@ func TestOwnerCreateAgainstHTTP(t *testing.T) {
 	}
 }
 
+func TestLedgerResetAgainstHTTP(t *testing.T) {
+	isolateEnv(t)
+	var saw string
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		saw = r.Method + " " + r.URL.Path
+		buf := make([]byte, 256)
+		n, _ := r.Body.Read(buf)
+		body = string(buf[:n])
+		if r.Header.Get("Authorization") != "Bearer lgr_admin" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"slug":"abusemanager","tasks_deleted":4}`))
+	}))
+	t.Cleanup(srv.Close)
+	path := filepath.Join(t.TempDir(), "config")
+	t.Setenv("LEDGER_CONFIG", path)
+	f := cliconfig.File{Profiles: map[string]cliconfig.Profile{}}
+	f.Put("default", cliconfig.Profile{URL: srv.URL, Token: "lgr_admin", Owner: "iq"})
+	if err := cliconfig.Save(path, f); err != nil {
+		t.Fatal(err)
+	}
+	if code := Ledger([]string{"reset", "--slug", "abusemanager", "--confirm", "iq/abusemanager"}); code != 0 {
+		t.Fatalf("ledger reset %d", code)
+	}
+	if saw != "POST /v1/iq/abusemanager/reset" {
+		t.Fatalf("saw %q", saw)
+	}
+	if !strings.Contains(body, `"confirm":"iq/abusemanager"`) {
+		t.Fatalf("body %q", body)
+	}
+}
+
 func TestWriteCursorMerges(t *testing.T) {
 	wd := t.TempDir()
 	t.Chdir(wd)

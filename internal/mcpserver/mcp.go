@@ -64,6 +64,10 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Description: "Mint a bearer token (plaintext once). Admin only. For a project agent, set ledger and role write, and put that token in an MCP server named for the project. Omit ledger for an owner-scoped token; name that MCP server for admin. Optional email binds the token for magic-link sign-in.",
 	}, h.createToken)
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "reset_ledger",
+		Description: "Wipe every task on a ledger and restart the series at T-001. Owner admin or operator. confirm must be exactly owner/ledger. Tokens and the ledger row stay. Write tokens are refused. Irreversible.",
+	}, h.resetLedger)
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_owner",
 		Description: "Create an owner. Operator token only. Optional first ledger and actor mints an owner-scoped admin token (plaintext once), not a ledger-bound token. Default max_ledgers is 1. For project agents, create_token with ledger set and role write.",
 	}, h.createOwner)
@@ -262,6 +266,31 @@ func (h *host) createToken(ctx context.Context, _ *mcp.CallToolRequest, in creat
 		out["email"] = issued.Token.Email
 	}
 	return nil, out, nil
+}
+
+type resetLedgerIn struct {
+	Owner   string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger  string `json:"ledger,omitempty" jsonschema:"Ledger slug. Required when the token covers several ledgers."`
+	Confirm string `json:"confirm" jsonschema:"Must be exactly owner/ledger, for example iq/abusemanager"`
+}
+
+type resetLedgerOut struct {
+	Owner        string `json:"owner"`
+	Ledger       string `json:"ledger"`
+	Title        string `json:"title"`
+	TasksDeleted int    `json:"tasks_deleted"`
+}
+
+func (h *host) resetLedger(ctx context.Context, _ *mcp.CallToolRequest, in resetLedgerIn) (*mcp.CallToolResult, resetLedgerOut, error) {
+	owner, ledger, err := h.scope(ctx, in.Owner, in.Ledger)
+	if err != nil {
+		return nil, resetLedgerOut{}, err
+	}
+	l, n, err := h.app.ResetLedger(ctx, h.tok, owner, ledger, in.Confirm)
+	if err != nil {
+		return nil, resetLedgerOut{}, err
+	}
+	return nil, resetLedgerOut{Owner: l.OwnerSlug, Ledger: l.Slug, Title: l.Title, TasksDeleted: n}, nil
 }
 
 type createOwnerIn struct {

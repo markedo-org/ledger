@@ -54,14 +54,17 @@ See `.agents/skills/task-ledger/`.
 
 ## Tools
 
-`list_ledgers`, `create_ledger`, `create_token`, `create_owner`,
-`set_max_ledgers`, `list_tasks`, `get_task`, `create_task`, `claim_task`,
-`next_task`, `add_note`, `set_check`, `set_phase`, `close_task`,
-`verify_task`, `heartbeat_task`, `release_task`, `review_url`, `set_tags`.
+`list_ledgers`, `create_ledger`, `create_token`, `reset_ledger`,
+`create_owner`, `set_max_ledgers`, `list_tasks`, `get_task`, `create_task`,
+`claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
+`close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`,
+`set_tags`.
 
 `create_owner` and `set_max_ledgers` need the operator token
-(`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` accept owner
-admin or operator.
+(`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` / `reset_ledger`
+accept owner admin or operator. `reset_ledger` requires `confirm` equal to
+`owner/ledger`. It wipes every task and restarts the series at T-001.
+Write tokens are refused. Tokens and the ledger row stay.
 
 Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key`.
 `close_task` requires `evidence`. Moving a task later requires `reason`.

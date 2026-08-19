@@ -89,6 +89,7 @@ func (s *Server) Engine() *gin.Engine {
 	v1.GET("/:owner/ledgers", s.listLedgers)
 	v1.POST("/:owner/ledgers", s.createLedger)
 	v1.PATCH("/:owner/ledgers/:ledger", s.patchLedger)
+	v1.POST("/:owner/:ledger/reset", s.resetLedger)
 	v1.POST("/:owner/tokens", s.createToken)
 	v1.POST("/:owner/:ledger/tasks", s.create)
 	v1.GET("/:owner/:ledger/tasks", s.list)
@@ -243,6 +244,24 @@ func (s *Server) patchLedger(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, s.ledgerJSON(l))
+}
+
+func (s *Server) resetLedger(c *gin.Context) {
+	var in struct {
+		Confirm string `json:"confirm"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		s.fail(c, err)
+		return
+	}
+	l, n, err := s.App.ResetLedger(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), in.Confirm)
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	out := s.ledgerJSON(l)
+	out["tasks_deleted"] = n
+	c.JSON(http.StatusOK, out)
 }
 
 func (s *Server) createLedger(c *gin.Context) {

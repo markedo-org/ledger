@@ -57,6 +57,7 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 | `ledger ledger create --slug` | Owner admin. Mints a bound write token and returns `mcp` |
 | `ledger ledger list` | Owner admin or operator |
 | `ledger ledger set --slug [--title] [--archive-done-after-days N] [--purge-done-after-days N]` | Owner admin. Title and per-ledger DONE retention. `0` means never |
+| `ledger ledger reset --slug --confirm owner/ledger` | Owner admin or operator. Wipes tasks and restarts at T-001. Tokens stay. |
 | `ledger token mint --actor [--ledger] [--role write]` | Owner admin |
 
 `init --write-cursor` also merges the admin MCP server into

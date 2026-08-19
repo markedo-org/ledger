@@ -8,7 +8,7 @@ import (
 
 func Ledger(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list|set")
+		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list|set|reset")
 		return 2
 	}
 	switch args[0] {
@@ -18,8 +18,10 @@ func Ledger(args []string) int {
 		return ledgerList(args[1:])
 	case "set":
 		return ledgerSet(args[1:])
+	case "reset":
+		return ledgerReset(args[1:])
 	default:
-		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list|set")
+		fmt.Fprintln(os.Stderr, "usage: ledger ledger create|list|set|reset")
 		return 2
 	}
 }
@@ -143,6 +145,44 @@ func ledgerSet(args []string) int {
 		body["purge_done_after_days"] = *purge
 	}
 	out, err := c.do("PATCH", "/v1/"+*owner+"/ledgers/"+*slug, body)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return printJSON(out)
+}
+
+func ledgerReset(args []string) int {
+	fs := flag.NewFlagSet("ledger reset", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	profile := fs.String("profile", "", "config profile (owner admin or operator)")
+	owner := fs.String("owner", "", "owner slug (default from profile)")
+	slug := fs.String("slug", "", "ledger slug")
+	confirm := fs.String("confirm", "", "must be owner/ledger")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *slug == "" {
+		fmt.Fprintln(os.Stderr, "ledger reset: --slug is required")
+		return 2
+	}
+	c, err := newAPI(*profile)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if *owner == "" {
+		*owner = c.owner
+	}
+	if *owner == "" {
+		fmt.Fprintln(os.Stderr, "ledger reset: --owner is required")
+		return 2
+	}
+	if *confirm == "" {
+		fmt.Fprintln(os.Stderr, "ledger reset: --confirm owner/ledger is required")
+		return 2
+	}
+	out, err := c.do("POST", "/v1/"+*owner+"/"+*slug+"/reset", map[string]any{"confirm": *confirm})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

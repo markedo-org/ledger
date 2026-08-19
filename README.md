@@ -91,6 +91,8 @@ on the body. Create requires `idempotency_key` (JSON or header
 | PATCH | `/v1/owners/:owner` | Set `max_ledgers` (operator). `0` is unlimited. |
 | GET | `/v1/:owner/ledgers` | List ledgers |
 | POST | `/v1/:owner/ledgers` | Create ledger (admin; enforces `max_ledgers`) |
+| PATCH | `/v1/:owner/ledgers/:ledger` | Title and DONE retention (admin) |
+| POST | `/v1/:owner/:ledger/reset` | Wipe tasks and restart at T-001 (admin or operator). `confirm` must be `owner/ledger`. |
 | POST | `/v1/:owner/tokens` | Mint a bearer token (admin; plaintext returned once). Optional `email`. |
 | POST | `/v1/:owner/:ledger/tasks` | Create |
 | GET | `/v1/:owner/:ledger/tasks` | List |

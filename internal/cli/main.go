@@ -66,6 +66,7 @@ Against a running server (same commands for local, self-host, hosted):
   ledger ledger create --slug jobs
   ledger ledger list
   ledger ledger set --slug inbox --archive-done-after-days 7 --purge-done-after-days 0
+  ledger ledger reset --slug inbox --confirm acme/inbox
   ledger token mint --actor bot --ledger jobs --role write
 
 Profiles: --profile or $LEDGER_PROFILE. $LEDGER_URL and $LEDGER_TOKEN override.

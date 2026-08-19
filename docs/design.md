@@ -35,7 +35,9 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
 ## Semantics that cannot wait
 
 - Two identities: uuid plus human handle, allocated in the insert transaction.
-  Numbers never reused. Idempotency key on create.
+  Numbers never reused while those tasks exist. An admin or operator reset
+  (confirm `owner/ledger`) wipes the ledger and restarts the series at 1.
+  Idempotency key on create.
 - Intent-shaped operations. Append-only notes. No `PUT` of a whole task.
 - Claims are leases (default 30 minutes, agent may request longer). Reaper.
   Pull (`next`), do not push. `steal` is logged. A live lease also has a

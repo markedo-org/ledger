@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0
+
+Owner admin or operator can reset a ledger: wipe every task and restart
+the series at T-001. `POST /v1/:owner/:ledger/reset`, CLI
+`ledger ledger reset`, MCP `reset_ledger`. `confirm` must be exactly
+`owner/ledger`. Tokens and the ledger row stay. Write tokens are refused.
+
 ## 0.15.13
 
 Skill and MCP docs: when to tag on a mixed board vs a dedicated ledger,

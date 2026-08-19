@@ -139,6 +139,29 @@ func (a *App) PatchLedger(ctx context.Context, tok types.Token, owner, ledger st
 	return a.Store.ResolveLedger(ctx, owner, ledger)
 }
 
+// ResetLedger wipes every task on the ledger and restarts series at 1.
+// confirm must be exactly owner/ledger. Owner admin or operator only.
+// Tokens and the ledger row stay.
+func (a *App) ResetLedger(ctx context.Context, tok types.Token, owner, ledger, confirm string) (types.Ledger, int, error) {
+	if err := a.requireAdmin(tok); err != nil {
+		return types.Ledger{}, 0, err
+	}
+	want := owner + "/" + ledger
+	if strings.TrimSpace(confirm) != want {
+		return types.Ledger{}, 0, fmt.Errorf("%w: confirm must be %s", ErrInvalid, want)
+	}
+	l, err := a.Ledger(ctx, tok, owner, ledger)
+	if err != nil {
+		return l, 0, err
+	}
+	n, err := a.Store.ResetLedger(ctx, l.ID, tok.Actor)
+	if err != nil {
+		return l, 0, err
+	}
+	out, err := a.Store.ResolveLedger(ctx, owner, ledger)
+	return out, n, err
+}
+
 func (a *App) purgeDone(ctx context.Context) (int, error) {
 	ledgers, err := a.Store.ListAllLedgers(ctx)
 	if err != nil {
