@@ -129,7 +129,10 @@ that chat only.
    not put it in a note or share it. Heartbeat if you will run past the
    lease. Pass `ttl_seconds` when you already know it will be long (max
    24h, default 30m). `add_note` stays open: notes are append-only, so a
-   reviewer can comment on a task you hold.
+   reviewer can comment on a task you hold. If you lose the `claim_id`,
+   which happens when a chat is compacted, take the lease back with
+   `claim_task` `steal: true` and a reason saying so. That works on your
+   own actor, mints a fresh id, and is written to the event log.
 2. Intent-shaped operations only. No whole-object PUT.
 3. Actor is the token, not a prefix. Series `T-` is a workstream.
 4. `idempotency_key` on every create. Agents retry.

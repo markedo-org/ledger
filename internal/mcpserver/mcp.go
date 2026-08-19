@@ -93,7 +93,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.createTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "claim_task",
-		Description: "Claim a task with a lease (default 30 minutes). Returns claim_id once. Keep it in this chat and pass it on heartbeat, re-claim, release, close, phase, checks, and tags while the lease is live. steal=true with a reason takes a live claim from another actor and issues a new claim_id.",
+		Description: "Claim a task with a lease (default 30 minutes). Returns claim_id once. Keep it in this chat and pass it on heartbeat, re-claim, release, close, phase, checks, and tags while the lease is live. steal=true with a reason takes a live claim and issues a new claim_id. Use it on your own actor too when the claim_id is gone, for example after this chat was compacted.",
 	}, h.claimTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "next_task",
@@ -129,7 +129,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.heartbeat)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "release_task",
-		Description: "Drop this chat's claim so another agent can take the task. Pass claim_id. Admin or operator can release another actor without it.",
+		Description: "Drop this chat's claim so another agent can take the task. Pass claim_id. An owner admin or operator token can release any live lease without it.",
 	}, h.release)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "review_url",

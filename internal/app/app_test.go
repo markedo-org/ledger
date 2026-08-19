@@ -454,3 +454,79 @@ func TestClaimIDIsolatesSameActorSessions(t *testing.T) {
 		t.Fatalf("legacy re-claim %v %q", err, upgraded.ClaimID)
 	}
 }
+
+// An agent whose chat was compacted still owns the work but no longer has the
+// claim_id. Without a way back in, the task is frozen until the lease expires
+// and not even the owner admin can clear it.
+func TestActorRecoversItsOwnLeaseWithoutTheClaimID(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{Title: "Lost the id", IdempotencyKey: "lost-1"}); err != nil {
+		t.Fatal(err)
+	}
+	held, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{Steal: true}); !errors.Is(err, app.ErrInvalid) {
+		t.Fatalf("taking back your own lease still needs a reason: %v", err)
+	}
+	back, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{
+		TTL: time.Hour, Steal: true, Reason: "same agent, chat was compacted",
+	})
+	if err != nil {
+		t.Fatalf("recover own lease: %v", err)
+	}
+	if back.ClaimID == "" || back.ClaimID == held.ClaimID {
+		t.Fatalf("a recovery must mint a fresh id, got %q", back.ClaimID)
+	}
+	if _, err := a.Heartbeat(ctx, tok, "markedo", "meta", "T-001", 0, held.ClaimID); !errors.Is(err, app.ErrConflict) {
+		t.Fatal("the id from before the recovery must stop working")
+	}
+	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "done", back.ClaimID); err != nil {
+		t.Fatalf("close with the recovered id: %v", err)
+	}
+}
+
+// The release route says admin or operator can clear another actor's lease.
+// That has to include a lease standing under the admin's own actor name.
+func TestAdminReleasesALeaseUnderItsOwnActor(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{Title: "Stuck", IdempotencyKey: "stuck-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Claim(ctx, tok, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := a.Release(ctx, tok, "markedo", "meta", "T-001", "")
+	if err != nil {
+		t.Fatalf("admin release without the id: %v", err)
+	}
+	if out.ClaimedBy != "" {
+		t.Fatalf("lease still held by %q", out.ClaimedBy)
+	}
+}
+
+// A write token is not an admin, so it keeps the strict rule.
+func TestWriteTokenStillNeedsTheClaimIDToRelease(t *testing.T) {
+	a, tok := boot(t)
+	ctx := context.Background()
+	if _, _, err := a.Create(ctx, tok, "markedo", "meta", app.CreateInput{Title: "Strict", IdempotencyKey: "strict-1"}); err != nil {
+		t.Fatal(err)
+	}
+	issued, err := a.CreateToken(ctx, tok, "markedo", app.CreateTokenInput{Actor: "ada", Role: "write", Ledger: "meta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := a.Auth(ctx, issued.Plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Claim(ctx, ada, "markedo", "meta", "T-001", app.ClaimInput{TTL: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Release(ctx, ada, "markedo", "meta", "T-001", ""); !errors.Is(err, app.ErrConflict) {
+		t.Fatalf("a write token must still prove the claim: %v", err)
+	}
+}

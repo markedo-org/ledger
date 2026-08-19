@@ -74,8 +74,13 @@ Pass it on heartbeat, same-actor re-claim, release, close, phase, checks, and
 tags while the lease is live. `set_check` and `set_tags` require it the same
 way as `set_phase` and `close_task`. `get_task`, `list_tasks`, and HTML never include it.
 Leases created before this field stay on the old same-actor refresh until
-they expire. Steal from another actor issues a new `claim_id`. There is no
-recover-my-own-lease path.
+they expire.
+
+If the `claim_id` is gone, because the chat was compacted or the session died,
+you are not locked out. `claim_task` with `steal: true` and a `reason` takes
+the lease back and mints a new `claim_id`, on your own actor as well as someone
+else's, and the steal is written to the event log either way. An owner admin or
+operator token can also `release_task` any live lease without the `claim_id`.
 
 `review_url` returns a one-time URL (`GET /login/review?code=`). Open it in
 a browser for the human. Do not paste the bearer token. Do not put the URL

@@ -43,8 +43,11 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
 - Claims are leases (default 30 minutes, agent may request longer). Reaper.
   Pull (`next`), do not push. `steal` is logged. A live lease also has a
   `claim_id` (capability for that chat). Same-actor refresh, heartbeat,
-  release, close, and phase need it. Notes stay open. HTML and get/list
-  never show it.
+  release, close, phase, checks, and tags need it. Notes stay open. HTML and
+  get/list never show it. A `claim_id` can be lost (a chat is compacted, a
+  session dies), so there are two audited ways back: `steal` with a reason,
+  which works on your own actor as well as someone else's, and a release by an
+  owner admin or operator token.
 - Event log from the first write. Materialised task table is the truth.
 - Schema copied from Markedo `TASKS.md`: phases NOW/NEXT/LATER/GATED/PARKED/DONE,
   gates as flags, size S|M|L, explicit rank, sub-checkboxes as child items

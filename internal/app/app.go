@@ -263,16 +263,18 @@ func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle 
 	}
 	now := time.Now().UTC()
 	live := leaseLive(t, now)
-	steal := in.Steal && live && t.ClaimedBy != tok.Actor
-	if live && t.ClaimedBy != tok.Actor {
-		if !in.Steal {
+	// A steal is the explicit, audited override, and it applies to your own
+	// actor name too. A chat that was compacted, or a second session, has lost
+	// the claim_id but still owns the work; without this the task is locked
+	// until the lease runs out and nobody can even release it.
+	steal := in.Steal && live
+	if steal && strings.TrimSpace(in.Reason) == "" {
+		return t, fmt.Errorf("%w: steal requires a reason", ErrInvalid)
+	}
+	if live && !steal {
+		if t.ClaimedBy != tok.Actor {
 			return t, fmt.Errorf("%w: held by %s until %s", ErrConflict, t.ClaimedBy, t.ClaimedUntil.Format(time.RFC3339))
 		}
-		if strings.TrimSpace(in.Reason) == "" {
-			return t, fmt.Errorf("%w: steal requires a reason", ErrInvalid)
-		}
-	}
-	if live && t.ClaimedBy == tok.Actor {
 		if err := leaseHeldElsewhere(t, in.ClaimID); err != nil {
 			return t, err
 		}
@@ -350,10 +352,13 @@ func (a *App) Release(ctx context.Context, tok types.Token, owner, ledger, handl
 	}
 	now := time.Now().UTC()
 	live := leaseLive(t, now)
-	if live && t.ClaimedBy != tok.Actor && tok.Role != types.RoleAdmin && !tok.IsOperator() {
-		return t, fmt.Errorf("%w: held by %s", ErrConflict, t.ClaimedBy)
-	}
-	if live && t.ClaimedBy == tok.Actor {
+	// Admin and operator override any live lease, including one standing under
+	// their own actor name. Requiring the claim_id there left an admin unable
+	// to clear a lease they could already have cleared for anyone else.
+	if live && tok.Role != types.RoleAdmin && !tok.IsOperator() {
+		if t.ClaimedBy != tok.Actor {
+			return t, fmt.Errorf("%w: held by %s", ErrConflict, t.ClaimedBy)
+		}
 		if err := leaseHeldElsewhere(t, claimID); err != nil {
 			return t, err
 		}

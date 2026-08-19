@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.1
+
+A lost `claim_id` no longer strands a task.
+
+0.17.0 tightened `claim_id` across the mutating routes, which made an existing
+gap bite: an agent that lost the id still held the lease and had no way back.
+`steal` only applied to another actor, and release under your own actor name
+demanded the id, so the task sat frozen until the lease ran out. Long leases
+made that hours. Chats get compacted and sessions die, so this is routine
+rather than rare.
+
+`claim_task` with `steal` and a `reason` now takes a lease back under your own
+actor as well as someone else's, minting a fresh `claim_id` and retiring the
+old one. Every steal is still written to the event log, so the escape hatch is
+audited rather than silent. An owner admin or operator token can now also
+release any live lease without the id, which is what the release route already
+claimed to allow for other actors.
+
+A write token is unchanged: it still has to prove the claim.
+
 ## 0.17.0
 
 Security and correctness pass over the whole server. Four fixes change
