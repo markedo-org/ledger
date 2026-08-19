@@ -366,8 +366,8 @@ h2.phase:first-of-type { border-top: 0; padding-top: 0; }
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-self: center;
   gap: 0.3rem;
-  padding-top: 0.12rem;
   max-width: 16rem;
 }
 .tag {

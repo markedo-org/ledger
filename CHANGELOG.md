@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.11
+
+Tag badges sit vertically centered against the two-line title and meta
+stack. The handle stays aligned with the title.
+
 ## 0.15.10
 
 Tag chips and the board tag filter are outlined badges: 1px mute border,
