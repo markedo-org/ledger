@@ -119,6 +119,10 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Name:        "release_task",
 		Description: "Drop this chat's claim so another agent can take the task. Pass claim_id. Admin or operator can release another actor without it.",
 	}, h.release)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "review_url",
+		Description: "Mint a one-time URL that signs a browser into the HTML board as this token. Open it for the human. Do not paste the bearer token. Do not put the URL in a task note. The link works once and expires in 15 minutes. Write tokens may mint.",
+	}, h.reviewURL)
 	s.AddResource(&mcp.Resource{
 		URI:         "ledger://live",
 		Name:        "Live ledger snapshot",
@@ -588,6 +592,20 @@ func (h *host) release(ctx context.Context, _ *mcp.CallToolRequest, in handleIn)
 		return nil, nil, err
 	}
 	return nil, taskMap(t), nil
+}
+
+type reviewURLIn struct{}
+
+func (h *host) reviewURL(ctx context.Context, _ *mcp.CallToolRequest, _ reviewURLIn) (*mcp.CallToolResult, map[string]any, error) {
+	u, exp, err := h.app.MintReviewURL(ctx, h.tok)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, map[string]any{
+		"url":                u,
+		"expires_in_seconds": exp,
+		"note":               "Open this URL in a browser for the human. It works once. Do not paste the bearer token. Do not put the URL in a task note.",
+	}, nil
 }
 
 func (h *host) readLive(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

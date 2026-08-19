@@ -64,6 +64,13 @@ func migrate(db *sql.DB) error {
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 )`,
+		`CREATE TABLE IF NOT EXISTS review_links (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  token_id TEXT NOT NULL REFERENCES tokens(id),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email) WHERE email != ''`,
 		`ALTER TABLE ledgers ADD COLUMN archive_done_after_days INTEGER`,
 		`ALTER TABLE ledgers ADD COLUMN purge_done_after_days INTEGER`,

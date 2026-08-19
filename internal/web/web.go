@@ -65,6 +65,7 @@ func (s *Server) Engine() *gin.Engine {
 	r.POST("/login", s.loginPost)
 	r.GET("/login/email", s.loginEmailGet)
 	r.POST("/login/email", s.loginEmailPost)
+	r.GET("/login/review", s.loginReviewGet)
 	r.GET("/login/github", s.loginGitHub)
 	r.POST("/logout", s.logout)
 	r.GET("/logout", func(c *gin.Context) {
@@ -79,6 +80,7 @@ func (s *Server) Engine() *gin.Engine {
 
 	v1 := r.Group("/v1")
 	v1.Use(s.auth)
+	v1.POST("/review", s.reviewPost)
 	v1.POST("/owners", s.createOwner)
 	v1.GET("/owners", s.listOwners)
 	v1.GET("/owners/:owner", s.getOwner)

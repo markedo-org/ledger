@@ -134,3 +134,59 @@ func TestMagicLinkInvalidEmail(t *testing.T) {
 		t.Fatalf("want invalid, got %v", err)
 	}
 }
+
+func TestReviewURLRoundTrip(t *testing.T) {
+	a, tok := boot(t)
+	a.PublicURL = "https://ledger.example"
+	ctx := context.Background()
+	u, exp, err := a.MintReviewURL(ctx, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exp != 900 {
+		t.Fatalf("expires %d", exp)
+	}
+	if !strings.HasPrefix(u, "https://ledger.example/login/review?code=lgv_") {
+		t.Fatalf("url %s", u)
+	}
+	if strings.Contains(u, tok.ID) {
+		t.Fatal("token id leaked into review url")
+	}
+	code := u[strings.Index(u, "lgv_"):]
+	first, _, err := a.MintReviewURL(ctx, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.ConsumeReviewLink(ctx, code); !errors.Is(err, app.ErrUnauthorized) {
+		t.Fatalf("replaced code still worked: %v", err)
+	}
+	sess, _, err := a.ConsumeReviewLink(ctx, first[strings.Index(first, "lgv_"):])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Actor != "maria" || sess.OwnerSlug != "markedo" || sess.LedgerSlug != "meta" {
+		t.Fatalf("session %+v", sess)
+	}
+	if _, _, err := a.ConsumeReviewLink(ctx, first[strings.Index(first, "lgv_"):]); !errors.Is(err, app.ErrUnauthorized) {
+		t.Fatalf("reuse want unauthorized, got %v", err)
+	}
+}
+
+func TestReviewURLOperatorRefused(t *testing.T) {
+	a, _ := boot(t)
+	a.SetOperatorToken("op-secret")
+	tok, err := a.Auth(context.Background(), "op-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.MintReviewURL(context.Background(), tok); !errors.Is(err, app.ErrForbidden) {
+		t.Fatalf("want forbidden, got %v", err)
+	}
+}
+
+func TestReviewURLRejectsMagicPrefix(t *testing.T) {
+	a, _ := boot(t)
+	if _, _, err := a.ConsumeReviewLink(context.Background(), "lgl_deadbeef"); !errors.Is(err, app.ErrUnauthorized) {
+		t.Fatalf("want unauthorized, got %v", err)
+	}
+}

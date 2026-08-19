@@ -52,6 +52,11 @@ on a hidden handle. Do not delete DONE tasks.
 HTML `/login` is for humans. Agents use the bearer token, not the session
 cookie.
 
+When the human wants to see the live board in a browser (Cursor Browser or
+otherwise), call `review_url` and open the returned URL. Do not paste the
+bearer token into `/login`. Do not put the URL in a task note. The link
+works once and expires in 15 minutes. A write token is enough.
+
 ## TASKS.md in a git repo
 
 If a repo still has a hand-written `TASKS.md`, that is not a ledger snapshot.
@@ -93,7 +98,7 @@ that chat only.
 `list_ledgers`, `create_ledger`, `create_token` (admin), `create_owner` and
 `set_max_ledgers` (operator), `list_tasks`, `get_task`, `create_task`,
 `claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
-`close_task`, `verify_task`, `heartbeat_task`, `release_task`.
+`close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`.
 
 `create_ledger` as owner admin mints a ledger-bound write token (once) and
 returns an `mcp` object named `task-ledger-<slug>`. That is the project

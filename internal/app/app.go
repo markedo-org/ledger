@@ -520,8 +520,12 @@ func (a *App) Reap(ctx context.Context) (int, error) {
 	if err != nil {
 		return n + s + m, err
 	}
+	r, err := a.Store.ReapReviewLinks(ctx)
+	if err != nil {
+		return n + s + m + r, err
+	}
 	p, err := a.purgeDone(ctx)
-	return n + s + m + p, err
+	return n + s + m + r + p, err
 }
 
 func (a *App) ListLedgersPublic(ctx context.Context, ownerSlug string) ([]LedgerInfo, error) {

@@ -49,3 +49,35 @@ func (s *Server) loginEmailGet(c *gin.Context) {
 	}
 	c.Redirect(http.StatusFound, homePath(sess, ""))
 }
+
+func (s *Server) loginReviewGet(c *gin.Context) {
+	code := strings.TrimSpace(c.Query("code"))
+	if code == "" {
+		s.renderLogin(c, "That review link is missing its code.")
+		return
+	}
+	_, plain, err := s.App.ConsumeReviewLink(c.Request.Context(), code)
+	if err != nil {
+		s.renderLogin(c, "That review link is invalid or has expired.")
+		return
+	}
+	s.setCookie(c, sessionCookie, plain, int(app.SessionTTL.Seconds()))
+	sess, err := s.App.Session(c.Request.Context(), plain)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/owners")
+		return
+	}
+	c.Redirect(http.StatusFound, homePath(sess, ""))
+}
+
+func (s *Server) reviewPost(c *gin.Context) {
+	url, exp, err := s.App.MintReviewURL(c.Request.Context(), tokenFrom(c))
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"url":                url,
+		"expires_in_seconds": exp,
+	})
+}

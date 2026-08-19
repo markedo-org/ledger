@@ -327,3 +327,72 @@ func TestOwnerPageAndLedgerSettings(t *testing.T) {
 		t.Fatalf("owner missing new title: %s", rec.Body.String())
 	}
 }
+
+func TestReviewURLHTTP(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	a.PublicURL = "https://ledger.example"
+	srv, err := web.New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Auth.RequireHTML = true
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/review", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("mint %d %s", rec.Code, rec.Body.String())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := out["url"].(string)
+	if !strings.Contains(raw, "/login/review?code=lgv_") {
+		t.Fatalf("url %s", raw)
+	}
+	if strings.Contains(raw, tok) {
+		t.Fatal("bearer token leaked into review url")
+	}
+	path := raw[strings.Index(raw, "/login/review"):]
+
+	req = httptest.NewRequest(http.MethodGet, path, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/markedo/meta" {
+		t.Fatalf("consume %d loc=%s", rec.Code, rec.Header().Get("Location"))
+	}
+	sess := cookieVal(rec, "ledger_session")
+	if sess == "" {
+		t.Fatal("missing session cookie")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, path, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusFound && rec.Header().Get("Location") == "/markedo/meta" {
+		t.Fatal("review code reused")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: sess})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("board %d", rec.Code)
+	}
+}

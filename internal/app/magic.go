@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/markedo-org/ledger/internal/store"
 	"github.com/markedo-org/ledger/internal/types"
 )
 
@@ -64,6 +65,44 @@ func (a *App) RequestMagicLink(ctx context.Context, email string) error {
 		log.Printf("magic-link send: %v", err)
 	}
 	return nil
+}
+
+func (a *App) publicBase() string {
+	base := strings.TrimRight(a.PublicURL, "/")
+	if base == "" {
+		return "http://127.0.0.1:8080"
+	}
+	return base
+}
+
+func (a *App) MintReviewURL(ctx context.Context, tok types.Token) (string, int, error) {
+	if tok.ID == "" {
+		return "", 0, fmt.Errorf("%w: review_url needs a minted owner or ledger token, not the operator secret", ErrForbidden)
+	}
+	code, err := a.Store.CreateReviewLink(ctx, tok.ID)
+	if err != nil {
+		return "", 0, err
+	}
+	return a.publicBase() + "/login/review?code=" + code, int(store.MagicTTL.Seconds()), nil
+}
+
+func (a *App) ConsumeReviewLink(ctx context.Context, code string) (types.Session, string, error) {
+	code = strings.TrimSpace(code)
+	if !strings.HasPrefix(code, "lgv_") {
+		return types.Session{}, "", ErrUnauthorized
+	}
+	tok, err := a.Store.ConsumeReviewLink(ctx, code)
+	if err == sql.ErrNoRows {
+		return types.Session{}, "", ErrUnauthorized
+	}
+	if err != nil {
+		return types.Session{}, "", err
+	}
+	role := ""
+	if tok.IsOperator() {
+		role = types.RoleOperator
+	}
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, role)
 }
 
 func (a *App) ConsumeMagicLink(ctx context.Context, code string) (types.Session, string, error) {

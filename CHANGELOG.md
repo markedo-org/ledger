@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.7
+
+`review_url` (MCP) and `POST /v1/review` mint a one-time, 15-minute code.
+`GET /login/review?code=` sets the session cookie and redirects to the
+board. The bearer token never goes in the query string. Operator secret
+cannot mint. Skill: open that URL for the human, do not paste the token.
+
 ## 0.15.6
 
 Owner page: capacity as in-use / cap / open, billing only when

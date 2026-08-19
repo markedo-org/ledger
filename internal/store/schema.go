@@ -140,4 +140,12 @@ CREATE TABLE IF NOT EXISTS magic_links (
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS review_links (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  token_id TEXT NOT NULL REFERENCES tokens(id),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `

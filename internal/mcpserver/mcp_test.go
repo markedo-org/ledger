@@ -451,3 +451,59 @@ func TestMCPListDoneOnly(t *testing.T) {
 		t.Fatalf("done list missing T-001: %s", raw)
 	}
 }
+
+func TestMCPReviewURL(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	a := app.New(s)
+	a.PublicURL = "https://ledger.example"
+	httpSrv := httptest.NewServer(mcpserver.Handler(a))
+	t.Cleanup(httpSrv.Close)
+	ctx := context.Background()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v0.1.0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   httpSrv.URL,
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: tok}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, tool := range tools.Tools {
+		if tool.Name == "review_url" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("review_url missing from tools/list")
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "review_url", Arguments: map[string]any{}})
+	if err != nil || res.IsError {
+		t.Fatalf("review_url %v %+v", err, res)
+	}
+	raw, _ := json.Marshal(res.StructuredContent)
+	if !strings.Contains(string(raw), "/login/review?code=lgv_") {
+		t.Fatalf("expected review url: %s", raw)
+	}
+	if strings.Contains(string(raw), tok) {
+		t.Fatal("bearer token leaked into review_url result")
+	}
+}
