@@ -366,26 +366,38 @@ h2.phase:first-of-type { border-top: 0; padding-top: 0; }
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.35rem 0.55rem;
-  padding-top: 0.2rem;
-  max-width: 14rem;
+  gap: 0.3rem;
+  padding-top: 0.12rem;
+  max-width: 16rem;
 }
 .tag {
+  display: inline-block;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
   color: var(--mute);
+  border: 1px solid var(--field-line);
+  border-radius: 999px;
+  padding: 0.14rem 0.5rem;
 }
 .tag-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 0.85rem;
-  margin: -0.35rem 0 1.5rem;
+  align-items: center;
+  gap: 0.35rem;
+  margin: -0.15rem 0 1.5rem;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
-.tag-nav a { color: var(--mute); text-decoration: none; }
-.tag-nav a:hover { color: var(--claim); }
-.tag-nav a.on { color: var(--ink); }
+.tag-nav a {
+  color: var(--mute);
+  text-decoration: none;
+  border: 1px solid var(--field-line);
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+}
+.tag-nav a:hover { color: var(--claim); border-color: var(--claim); }
+.tag-nav a.on { color: var(--ink); border-color: var(--ink); }
 .pill {
   display: inline-block;
   font-family: var(--font-mono);

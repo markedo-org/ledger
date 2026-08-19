@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.10
+
+Tag chips and the board tag filter are outlined badges: 1px mute border,
+full rounding, no fill colour.
+
 ## 0.15.9
 
 Optional tags on tasks: at most three lowercase slugs. Set on create,
