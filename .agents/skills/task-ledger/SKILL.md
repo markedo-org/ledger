@@ -102,6 +102,14 @@ Do not treat it as the write path once this server is in use. Do not edit a
 file the server generated (`/{owner}/{ledger}.md`). Until the humans migrate,
 ask which write path they mean.
 
+If they do ask you to carry that file's items onto the ledger, do not carry its
+IDs. The file's `T-NNN` numbering is its own and collides with the handles this
+server allocates, so a title like `T-042: fix the webhook` shows two unrelated
+IDs on one row and, per rule 11, can never be tidied up. Put the old ID in the
+body when provenance matters, or leave it in git history where it already is.
+Ask before creating in bulk: duplicates cannot be deleted either, they can only
+be closed, so a mistaken import is permanent clutter in DONE.
+
 ## Identity
 
 The bearer token is the actor. Do not send an impersonation header or an
@@ -130,6 +138,12 @@ that chat only.
 8. `list_tasks` is a thin index. `get_task` before you act.
 9. `verified_at` is set when someone verifies, not at create.
 10. Do not delete DONE tasks. Use `list_tasks` with `done=true` to see the archive.
+11. The title is a short human summary and nothing else. No handle, no series
+    prefix, no ID carried in from somewhere else. The server allocates the
+    handle, so `T-042: fix the webhook` puts two different IDs on one row.
+    **A title cannot be corrected.** There is no tool and no route for it, so a
+    bad title stands until someone edits the database by hand. Get it right at
+    create time, because you get one attempt.
 
 ## Tools
 
