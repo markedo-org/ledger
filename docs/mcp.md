@@ -78,9 +78,11 @@ recover-my-own-lease path.
 a browser for the human. Do not paste the bearer token. Do not put the URL
 in a task note. Write tokens may mint. The operator secret cannot.
 
-`create_task` accepts optional `tags` (at most three lowercase slugs).
-`set_tags` replaces them. `list_tasks` accepts `tag` to keep tasks with
-that slug. A tag is a filter, not a ledger.
+`create_task` accepts optional `tags` (at most three lowercase slugs,
+same charset as owner slugs). `set_tags` replaces them; an empty list
+clears. `list_tasks` accepts one `tag` to keep tasks with that slug.
+A tag is a filter chip, not a ledger and not a nested project. Isolation
+is a ledger-bound token. See the task-ledger skill for when to tag.
 
 `list_tasks` hides DONE older than `archive_done_after_days` (process default
 7, or the ledger override). Pass `done: true` for every DONE task, and only

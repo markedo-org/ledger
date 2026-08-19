@@ -50,11 +50,42 @@ Default list hides DONE older than the ledger's archive window. Pass
 with that slug. `get_task` still works on a hidden handle. Do not delete
 DONE tasks.
 
-On a mixed-purpose board (one ledger covering several products or hats),
-set tags on create (`ledger`, `site`, `finance`). At most three lowercase
-slugs, same charset as owner slugs. Filter with `list_tasks` `tag=` or
-the HTML `?tag=` chips. Change later with `set_tags`. A tag is a filter,
-not a ledger: isolation still means a ledger-bound token.
+## Tags
+
+A tag is an optional filter chip. It is not a project, not a folder, and
+not a ledger. Do not invent a second "project" field.
+
+- At most three. Lowercase slugs, same charset as owner slugs
+  (`^[a-z0-9][a-z0-9-]{0,62}$`). Duplicates and blanks are dropped.
+  Empty `set_tags` clears.
+- Set them on `create_task`. Replace later with `set_tags`. Filter with
+  **one** tag only: `list_tasks` `tag=` or the HTML `?tag=` chips. No
+  AND, no OR, no colours.
+- Isolation (who may write, which agent, which token) is a
+  **ledger-bound token**, never a tag. Extra ledgers are a paid hosted
+  feature; do not create one to stand in for a tag.
+
+When to tag:
+
+- **Mixed-purpose board** (several products or hats on one ledger): tag
+  on create so a human can filter. Reuse a slug that already appears on
+  the board before minting a new one. Examples: `ledger`, `site`,
+  `finance`.
+- **Dedicated product ledger**: skip a product-name tag. The ledger *is*
+  the product. Tag only if that board itself is mixed (for example
+  `docs` vs `billing` on that product).
+
+When not to tag:
+
+- Phase, size, claimant, handle, or a file path in a large repo. Those
+  already have fields, or they are too fine to filter on.
+- A substitute for claiming, for a second series, or for a second board.
+
+If this session's `create_task` has no `tags` field (or `set_tags` /
+`review_url` are missing), the MCP schema is stale. Ask the human to
+refresh MCP settings and start a **new chat**. Until then, HTTP
+`POST /v1/:owner/:ledger/tasks/:handle/tags` with the bearer from
+harness config. Do not print the token. Do not skip the tag.
 
 HTML `/login` is for humans. Agents use the bearer token, not the session
 cookie.

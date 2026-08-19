@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.13
+
+Skill and MCP docs: when to tag on a mixed board vs a dedicated ledger,
+when not to, and what to do if this session's MCP schema is stale.
+
 ## 0.15.12
 
 Phase headings sit in space, not between two similar rules. The last
