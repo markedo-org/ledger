@@ -90,12 +90,12 @@ on the body. Create requires `idempotency_key` (JSON or header
 | GET | `/v1/owners/:owner` | Owner, cap, ledgers, which are frozen |
 | PATCH | `/v1/owners/:owner` | Set `max_ledgers` (operator). `0` is unlimited. |
 | GET | `/v1/:owner/ledgers` | List ledgers |
-| POST | `/v1/:owner/ledgers` | Create ledger (admin; enforces `max_ledgers`) |
-| PATCH | `/v1/:owner/ledgers/:ledger` | Title and DONE retention (admin) |
-| POST | `/v1/:owner/:ledger/reset` | Wipe tasks and restart at T-001 (admin or operator). `confirm` must be `owner/ledger`. |
-| GET | `/v1/:owner/tokens` | List tokens (admin; id and metadata only, no secret). |
-| POST | `/v1/:owner/tokens` | Mint a bearer token (admin; plaintext and id returned once). Optional `email`. |
-| DELETE | `/v1/:owner/tokens/:id` | Revoke token (admin; irreversible). |
+| POST | `/v1/:owner/ledgers` | Create ledger (owner admin or operator; enforces `max_ledgers`) |
+| PATCH | `/v1/:owner/ledgers/:ledger` | Title and DONE retention (owner admin) |
+| POST | `/v1/:owner/:ledger/reset` | Wipe tasks and restart at T-001 (owner admin). `confirm` must be `owner/ledger`. |
+| GET | `/v1/:owner/tokens` | List tokens (owner admin; id and metadata only, no secret). |
+| POST | `/v1/:owner/tokens` | Mint a bearer token (owner admin; operator may mint role write only). Plaintext and id returned once. Optional `email`. |
+| DELETE | `/v1/:owner/tokens/:id` | Revoke token (owner admin; irreversible). |
 | POST | `/v1/review` | Mint a one-time browser review URL (write token; operator refused) |
 | POST | `/v1/:owner/:ledger/tasks` | Create |
 | GET | `/v1/:owner/:ledger/tasks` | List. Query `done=1` or `done=true` for DONE only; `tag=` filters by tag slug |

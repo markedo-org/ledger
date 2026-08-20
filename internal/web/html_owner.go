@@ -47,9 +47,8 @@ func canManageLedger(sess types.Session, ok bool, owner, ledger string) bool {
 	if !ok {
 		return false
 	}
-	if sess.IsOperator() {
-		return true
-	}
+	// No operator branch: a ledger's title and retention belong to its owner.
+	// Rendering the form for a host session only invited a 403 on submit.
 	if sess.Role != types.RoleAdmin {
 		return false
 	}

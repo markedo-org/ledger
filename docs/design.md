@@ -39,7 +39,7 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
   irreversible, cascades to HTML sessions and one-time links, row kept for
   audit. Cannot self-revoke; mint the replacement first.
 - Two identities: uuid plus human handle, allocated in the insert transaction.
-  Numbers never reused while those tasks exist. An admin or operator reset
+  Numbers never reused while those tasks exist. An owner admin reset
   (confirm `owner/ledger`) wipes the ledger and restarts the series at 1.
   Idempotency key on create.
 - Intent-shaped operations. Append-only notes. No `PUT` of a whole task.
@@ -50,7 +50,7 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
   get/list never show it. A `claim_id` can be lost (a chat is compacted, a
   session dies), so there are two audited ways back: `steal` with a reason,
   which works on your own actor as well as someone else's, and a release by an
-  owner admin or operator token.
+  owner admin token.
 - A claim is conditional on the task version it was decided from. The check and
   the write are separate steps, so agents racing for one task all judge it free
   before any of them writes; the version guard means only the first write lands
@@ -73,8 +73,11 @@ Self-hosters call the same operator routes Markedo calls from
 `www.task-ledger.com`.
 
 - Host-level operator token (not owner `admin`): create owners, create
-  ledgers, set `max_ledgers` (`0` is unlimited on set; create defaults to 1).
-  HTML `/admin` on the same process.
+  ledgers, set `max_ledgers` (`0` is unlimited on set; create defaults to 1),
+  mint write tokens for any owner. It deliberately cannot read, alter, or delete
+  tenant tasks, reset a ledger, change ledger settings, list or revoke tokens,
+  or mint admin for an owner that already exists. HTML `/admin` on the same
+  process; operator and GitHub allowlist sessions cannot open a tenant board.
 - Overflow freeze: when cap is below ledger count, newest ledgers are
   read-only; oldest `max_ledgers` stay writable. Same-second creates follow
   insert order. Derive, do not store a flag.

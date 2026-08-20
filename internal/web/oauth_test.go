@@ -87,12 +87,24 @@ func TestOAuthCallbackAllowlist(t *testing.T) {
 	if session == "" {
 		t.Fatal("missing session cookie")
 	}
+	// An allowlisted GitHub login is a host session, not a member of any
+	// owner. It gets the owner list it administers.
+	req = httptest.NewRequest(http.MethodGet, "/owners", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: session})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("owner list %d %s", rec.Code, rec.Body.String())
+	}
+
+	// It does not get to read a tenant's board. Running the host is not
+	// membership of everyone on it.
 	req = httptest.NewRequest(http.MethodGet, "/markedo/meta", nil)
 	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: session})
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "markedo/meta") {
-		t.Fatalf("html %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("host session read a tenant board: %d %s", rec.Code, rec.Body.String())
 	}
 }
 

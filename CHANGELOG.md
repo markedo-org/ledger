@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.21.0
+
+Breaking. The operator token is a provisioning credential now, not a master key.
+
+`LEDGER_OPERATOR_TOKEN` is held by whoever runs the server. It used to satisfy
+every ownership and admin check in the codebase, so running the host meant
+being an admin of everyone on it: read any board, write into it, claim or break
+anyone's lease, empty a ledger, revoke a tenant's tokens. That is a great deal
+more than provisioning needs, and none of it was visible to the tenant.
+
+Admin is authority inside one owner. The operator is not inside any owner. It
+can still create owners, list and read them, set `max_ledgers`, create ledgers,
+and mint `write` tokens for any owner, which is everything a host needs to sell
+and meter the service. It can no longer read or write tasks, override a lease,
+reset a ledger, change ledger settings, or list and revoke an owner's tokens.
+
+It also cannot mint an `admin` token for an owner that already exists. Without
+that last one the rest would be theatre: an operator able to mint itself admin
+over any tenant still holds root, it just takes one more call. An owner is
+issued its one admin token when the owner is created. If that token is lost,
+the way back is magic-link sign-in to the email bound to it, not a host
+override, so bind an email at signup.
+
+The HTML side moved with it. A GitHub allowlist sign-in creates an operator
+session, and the board renders through a public read gated only on the session,
+so leaving that open would have handed the host every customer's tasks in a
+browser while the API refused them. An operator session now reaches `/owners`
+and `/admin` and stops there.
+
+If you self-host alone, you are both the operator and the owner admin, and
+nothing about your day changes except that destructive acts want the owner
+token. If you host for others, they can now be told what you cannot see.
+
 ## 0.20.2
 
 Documentation only. The docs described shipped work as future work, which left

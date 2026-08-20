@@ -33,22 +33,39 @@ to this API like any other client.
 1. Operator API: `POST /v1/owners`, `GET /v1/owners`, `PATCH /v1/owners/:owner`
    (set `max_ledgers`). Same auth as MCP `create_owner` and `set_max_ledgers`.
 2. HTML `/admin` when signed in with the operator token (or a GitHub allowlist
-   session). Create owners, set caps, create ledgers, mint tokens.
+   session). Create owners, set caps, create ledgers, mint write tokens.
 3. Overflow freeze when `max_ledgers` is below the ledger count.
 
 ## Operator token
 
 A host-level credential, distinct from the first owner's boot token and from
 owner `admin`. Working name: operator token (the HTML page may say admin).
+Admin is authority inside one owner; the operator is not inside any owner. A
+host must stand tenants up and meter them without being able to read or delete
+their work.
 
 It can:
 
 - create an owner (slug; `max_ledgers` defaults to 1 on create, and `0` on
-  create is treated as 1)
+  create is treated as 1). Optional `ledger` + `actor` mints that owner's one
+  admin token once, optionally email-bound
+- list and read owners
 - create a ledger under any owner (still subject to that owner's cap)
 - set `max_ledgers` on an owner (`0` means unlimited; negative values are
   rejected)
-- mint the first token for a new owner so they can sign in
+- mint write tokens for any owner (`POST /v1/:owner/tokens`, MCP `create_token`,
+  CLI `ledger token mint --role write`)
+- reach HTML `/admin` (GitHub allowlist sign-in is the same operator session)
+
+It cannot:
+
+- read, create, claim, or alter tasks in any ledger (API, MCP, or CLI)
+- reset a ledger or change ledger settings (title, DONE retention)
+- list or revoke an owner's tokens
+- mint an admin token for an owner that already exists (403). An owner's admin
+  token is issued once at owner creation. If it is lost, recovery is magic-link
+  sign-in to the email bound at creation, not a host override
+- open a tenant's board in the HTML UI
 
 Self-hosters set it in env (`LEDGER_OPERATOR_TOKEN`). The Markedo website holds
 the hosted instance's copy and never puts it in a tracked file. HTML: sign in
@@ -56,7 +73,8 @@ at `/login` with that token, then `/admin`. See [`auth.md`](auth.md).
 
 CLI: `ledger owner create`, `ledger owner list`, `ledger owner set-max
 --max-ledgers N` with an operator profile. MCP: `create_owner`,
-`set_max_ledgers`.
+`set_max_ledgers`, `create_ledger`, `create_token` (write only for existing
+owners).
 
 ## Overflow freeze
 

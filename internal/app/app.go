@@ -89,9 +89,9 @@ func (a *App) Ledger(ctx context.Context, tok types.Token, owner, ledger string)
 	if err != nil {
 		return l, err
 	}
-	if tok.IsOperator() {
-		return l, nil
-	}
+	// The operator does not land here. It provisions tenants; it does not read
+	// or write inside them. Letting it resolve any ledger was what made
+	// "operator" mean root over everyone's tasks.
 	if tok.OwnerID != l.OwnerID {
 		return l, ErrForbidden
 	}
@@ -358,10 +358,12 @@ func (a *App) Release(ctx context.Context, tok types.Token, owner, ledger, handl
 	}
 	now := time.Now().UTC()
 	live := leaseLive(t, now)
-	// Admin and operator override any live lease, including one standing under
+	// An owner's admin overrides any live lease, including one standing under
 	// their own actor name. Requiring the claim_id there left an admin unable
-	// to clear a lease they could already have cleared for anyone else.
-	if live && tok.Role != types.RoleAdmin && !tok.IsOperator() {
+	// to clear a lease they could already have cleared for anyone else. The
+	// operator is not an admin here and never reaches this code: it cannot
+	// resolve the ledger the task lives in.
+	if live && tok.Role != types.RoleAdmin {
 		if t.ClaimedBy != tok.Actor {
 			return t, fmt.Errorf("%w: held by %s", ErrConflict, t.ClaimedBy)
 		}
@@ -656,7 +658,23 @@ func (a *App) requireOwner(tok types.Token, ownerSlug string) error {
 	return nil
 }
 
+// Admin is authority inside one owner, and the operator is not inside any
+// owner. The two used to be the same check, which is how a host-level token
+// came to be able to reset a customer's ledger and revoke their tokens.
 func (a *App) requireAdmin(tok types.Token) error {
+	if tok.Role == types.RoleAdmin {
+		return nil
+	}
+	if tok.IsOperator() {
+		return fmt.Errorf("%w: the operator token provisions owners and ledgers, it is not an admin of this one", ErrForbidden)
+	}
+	return fmt.Errorf("%w: admin role required", ErrForbidden)
+}
+
+// requireProvisioner gates the acts an operator exists to perform: standing up
+// an owner, giving it a ledger, and handing its people tokens. An owner's own
+// admin can do these inside its own tenancy too.
+func (a *App) requireProvisioner(tok types.Token) error {
 	if tok.IsOperator() || tok.Role == types.RoleAdmin {
 		return nil
 	}
@@ -698,7 +716,7 @@ type CreateLedgerInput struct {
 }
 
 func (a *App) CreateLedger(ctx context.Context, tok types.Token, ownerSlug string, in CreateLedgerInput) (types.Ledger, error) {
-	if err := a.requireAdmin(tok); err != nil {
+	if err := a.requireProvisioner(tok); err != nil {
 		return types.Ledger{}, err
 	}
 	o, err := a.resolveOwner(ctx, tok, ownerSlug)
@@ -805,8 +823,23 @@ type IssuedToken struct {
 	Plain string
 }
 
+// CreateToken mints a token for an owner that already exists. Creating the
+// owner in the first place goes through issueToken directly, because that one
+// admin token is the whole point of provisioning an owner.
 func (a *App) CreateToken(ctx context.Context, tok types.Token, ownerSlug string, in CreateTokenInput) (IssuedToken, error) {
-	if err := a.requireAdmin(tok); err != nil {
+	// Without this the rest is theatre: an operator that can mint itself an
+	// admin token for any owner still has root over every tenant, it just
+	// takes one more call. An owner gets its admin token once, when the owner
+	// is created. If that token is lost, the way back is the email bound to
+	// it, not a host-level override.
+	if tok.IsOperator() && strings.EqualFold(strings.TrimSpace(in.Role), types.RoleAdmin) {
+		return IssuedToken{}, fmt.Errorf("%w: the operator token cannot mint an admin token for an existing owner; an owner's admin token is issued once at creation and recovered by email sign-in", ErrForbidden)
+	}
+	return a.issueToken(ctx, tok, ownerSlug, in)
+}
+
+func (a *App) issueToken(ctx context.Context, tok types.Token, ownerSlug string, in CreateTokenInput) (IssuedToken, error) {
+	if err := a.requireProvisioner(tok); err != nil {
 		return IssuedToken{}, err
 	}
 	o, err := a.resolveOwner(ctx, tok, ownerSlug)

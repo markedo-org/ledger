@@ -25,8 +25,9 @@ just use their existing GitHub account. Not required for HTML if token login is
 enough.
 
 - **Markedo hosted:** we register one app against the task-ledger domain.
-  The allowlist is host humans (Markedo), not customers. A GitHub session
-  can see every live view. It is not mapped to an owner or a GitHub org.
+  The allowlist is host humans (Markedo), not customers. A GitHub allowlist
+  sign-in creates an operator session: it can see `/owners` and `/admin`, not a
+  tenant's task board. It is not mapped to an owner or a GitHub org.
   Customers sign in with a token we minted (and later a magic link). If we
   later want customer GitHub, bind a login to a token the same way we bind
   email. Do not grow a user table.
@@ -74,9 +75,9 @@ Set `LEDGER_SECURE_COOKIES=1` behind HTTPS.
 
 | Path | What |
 | --- | --- |
-| `GET /owners` | Signed-in home: owners this session may see. GitHub allowlist sees all. |
-| `GET /:owner` | Ledgers under that owner. Billing link only if `LEDGER_SITE_URL` is set. |
-| `GET /:owner/:ledger/settings` | Edit title and DONE retention. Owner-admin or operator session. |
+| `GET /owners` | Signed-in home: owners this session may see. Operator and GitHub allowlist see every owner. |
+| `GET /:owner` | Ledgers under that owner. Billing link only if `LEDGER_SITE_URL` is set. Owner sessions only: a host session sees an owner's ledgers on `/admin` instead. |
+| `GET /:owner/:ledger/settings` | Edit title and DONE retention. Owner-admin session only. |
 | `GET /:owner/:ledger` | Live task view. |
 | `GET /login` | Token form. Email form if SMTP is set. GitHub link if OAuth is configured. Sets a CSRF cookie. |
 | `POST /login` | Exchange a bearer token for a session cookie. Requires the CSRF field. |
@@ -91,18 +92,30 @@ Set `LEDGER_SECURE_COOKIES=1` behind HTTPS.
 Session cookie is HttpOnly, SameSite=Lax, 7 days. Stored hashed, like API tokens.
 A token login session is bound to that token's owner, and to its ledger when the
 token is ledger-bound. After sign-in, that session lands on `/{owner}` or
-`/{owner}/{ledger}`. GitHub allowlist sessions are host-wide (no owner binding) and may use
-`/admin`. They land on `/admin`. A project token lands on `/{owner}` or
+`/{owner}/{ledger}`. GitHub allowlist sessions are operator sessions (host-wide,
+no owner binding): they may use `/owners` and `/admin`, and land on `/admin`.
+They cannot open a tenant board. A project token lands on `/{owner}` or
 `/{owner}/{ledger}`. An operator token also lands on `/admin`. Anonymous `GET /` on
 hosted still 301s to the brochure.
 
 ## Operator token
 
 Host-level, set `LEDGER_OPERATOR_TOKEN`. Distinct from the first owner's boot
-token and from owner `admin`. Creates owners, sets `max_ledgers`, and is what
-a website (ours or a self-hoster's) uses to provision. HTML: sign in at
-`/login` with that token, then `/admin`. See
-[`provisioning.md`](provisioning.md). Do not let an owner's admin token
+token and from owner `admin`. Admin is authority inside one owner; the operator
+is not inside any owner. A host must stand tenants up and meter them without
+being able to read or delete their work.
+
+It can: create owners (minting that owner's one admin token once, optionally
+email-bound), list and read owners, set `max_ledgers`, create ledgers for any
+owner, mint write tokens for any owner, and reach HTML `/admin`. GitHub
+allowlist sign-in creates the same operator session for HTML.
+
+It cannot: read or write tasks, reset a ledger, change ledger settings, list or
+revoke tokens, mint admin for an owner that already exists, or open a tenant
+board in the HTML UI. If an owner's admin token is lost, recovery is magic-link
+sign-in to the email bound when the owner was created, not a host-level override.
+
+See [`provisioning.md`](provisioning.md). Do not let an owner's admin token
 raise its own cap.
 
 ```

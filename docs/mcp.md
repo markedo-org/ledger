@@ -66,9 +66,10 @@ See `.agents/skills/task-ledger/`.
 `set_tags`. `set_phase` accepts optional `force` to override a fourth deferral.
 
 `create_owner` and `set_max_ledgers` need the operator token
-(`LEDGER_OPERATOR_TOKEN`). `create_ledger` / `create_token` / `list_tokens` /
-`revoke_token` / `reset_ledger` accept owner admin or operator. A ledger-bound
-write token is refused for token list and revoke. `reset_ledger` requires `confirm` equal to
+(`LEDGER_OPERATOR_TOKEN`). `create_ledger` and `create_token` accept owner admin
+or operator; the operator may mint role write but not admin for an owner that
+already exists. `list_tokens`, `revoke_token`, and `reset_ledger` are owner admin
+only. A ledger-bound write token is refused for token list and revoke. `reset_ledger` requires `confirm` equal to
 `owner/ledger`. It wipes every task and restarts the series at T-001.
 Write tokens are refused. Tokens and the ledger row stay.
 
@@ -85,8 +86,8 @@ they expire.
 If the `claim_id` is gone, because the chat was compacted or the session died,
 you are not locked out. `claim_task` with `steal: true` and a `reason` takes
 the lease back and mints a new `claim_id`, on your own actor as well as someone
-else's, and the steal is written to the event log either way. An owner admin or
-operator token can also `release_task` any live lease without the `claim_id`.
+else's, and the steal is written to the event log either way. An owner admin
+token can also `release_task` any live lease without the `claim_id`.
 
 `review_url` returns a one-time URL (`GET /login/review?code=`). Open it in
 a browser for the human. Do not paste the bearer token. Do not put the URL

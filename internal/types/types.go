@@ -200,9 +200,17 @@ func (s Session) IsOperator() bool {
 }
 
 // Covers reports whether this HTML session may see owner/ledger.
-// An empty OwnerSlug is an operator session (GitHub allowlist) and sees all.
 // A ledger binding is ignored when ledger is empty (owner index).
+//
+// An operator session, which is what a GitHub allowlist sign-in creates, is
+// not a member of any owner. It covers the pages outside a tenancy, the owner
+// list and /admin, and nothing inside one. The board reads through ListPublic
+// and so is gated here and nowhere else: leaving this open would have handed
+// the host every customer's tasks in the browser while the API refused them.
 func (s Session) Covers(owner, ledger string) bool {
+	if s.IsOperator() {
+		return owner == ""
+	}
 	if s.OwnerSlug == "" {
 		return true
 	}

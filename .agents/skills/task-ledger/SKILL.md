@@ -159,7 +159,7 @@ that chat only.
 ## Tools
 
 `list_ledgers`, `create_ledger`, `create_token`, `list_tokens`, `revoke_token` (admin), `reset_ledger`
-(admin or operator; `confirm` must be `owner/ledger`; irreversible),
+(owner admin only; `confirm` must be `owner/ledger`; irreversible),
 `create_owner` and `set_max_ledgers` (operator), `list_tasks`, `get_task`,
 `create_task`, `claim_task`, `next_task`, `add_note`, `set_check`,
 `set_phase`, `close_task`, `verify_task`, `heartbeat_task`,

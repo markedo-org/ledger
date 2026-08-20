@@ -95,11 +95,24 @@ func TestOperatorProvisionAndFreeze(t *testing.T) {
 	}
 }
 
-func TestOperatorSessionCoversAll(t *testing.T) {
+// An operator session reaches the pages that are outside any tenancy, and
+// stops at the door of one. The board renders from ListPublic and is gated on
+// Covers alone, so this is the only thing standing between a host session and
+// every customer's tasks.
+func TestOperatorSessionStopsAtTheTenantDoor(t *testing.T) {
 	a, _ := boot(t)
 	a.SetOperatorToken("lgr_operator_test")
 	sess, _, err := a.SessionFromAPIToken(context.Background(), "lgr_operator_test")
-	if err != nil || !sess.IsOperator() || !sess.Covers("acme", "inbox") {
+	if err != nil || !sess.IsOperator() {
 		t.Fatalf("operator session %+v %v", sess, err)
+	}
+	if !sess.Covers("", "") {
+		t.Fatal("operator cannot reach the owner list it provisions")
+	}
+	if sess.Covers("acme", "inbox") {
+		t.Fatal("operator session can open a tenant's board")
+	}
+	if sess.Covers("acme", "") {
+		t.Fatal("operator session can open a tenant's ledger index")
 	}
 }

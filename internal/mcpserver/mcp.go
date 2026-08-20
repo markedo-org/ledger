@@ -61,23 +61,23 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.listLedgers)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_ledger",
-		Description: "Create a ledger under an owner. Admin only. Enforces max_ledgers. Creates series T. Owner admin: mints a ledger-bound write token (shown once) and returns an MCP config named for the project. Operator: pass actor to mint, or use the returned mcp object after create_token.",
+		Description: "Create a ledger under an owner. Owner admin or operator. Enforces max_ledgers. Creates series T. Owner admin: mints a ledger-bound write token (shown once) and returns an MCP config named for the project. Operator: pass actor to mint, or use the returned mcp object after create_token.",
 	}, h.createLedger)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_token",
-		Description: "Mint a bearer token (plaintext once). Admin only. For a project agent, set ledger and role write, and put that token in an MCP server named for the project. Omit ledger for an owner-scoped token; name that MCP server for admin. Optional email binds the token for magic-link sign-in.",
+		Description: "Mint a bearer token (plaintext once). Owner admin only; the operator token may mint role write for any owner but cannot mint admin for an owner that already exists. For a project agent, set ledger and role write, and put that token in an MCP server named for the project. Omit ledger for an owner-scoped token; name that MCP server for admin. Optional email binds the token for magic-link sign-in.",
 	}, h.createToken)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_tokens",
-		Description: "List every token minted for an owner, live and revoked. Admin only. Shows the id, actor, role, ledger binding and email, never the secret. Use it to find the id to revoke.",
+		Description: "List every token minted for an owner, live and revoked. Owner admin only. Shows the id, actor, role, ledger binding and email, never the secret. Use it to find the id to revoke.",
 	}, h.listTokens)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "revoke_token",
-		Description: "Revoke a bearer token by id. Admin only. Kills any HTML session and any magic or review link standing on it. Irreversible: the plaintext is gone, so a revoked token can never be restored. A token cannot revoke itself, so to rotate, mint the replacement, put it in every config that held the old one, then revoke the old id with the new token.",
+		Description: "Revoke a bearer token by id. Owner admin only. Kills any HTML session and any magic or review link standing on it. Irreversible: the plaintext is gone, so a revoked token can never be restored. A token cannot revoke itself, so to rotate, mint the replacement, put it in every config that held the old one, then revoke the old id with the new token.",
 	}, h.revokeToken)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "reset_ledger",
-		Description: "Wipe every task on a ledger and restart the series at T-001. Owner admin or operator. confirm must be exactly owner/ledger. Tokens and the ledger row stay. Write tokens are refused. Irreversible.",
+		Description: "Wipe every task on a ledger and restart the series at T-001. Owner admin only. confirm must be exactly owner/ledger. Tokens and the ledger row stay. Write tokens are refused. Irreversible.",
 	}, h.resetLedger)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_owner",
@@ -137,7 +137,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.heartbeat)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "release_task",
-		Description: "Drop this chat's claim so another agent can take the task. Pass claim_id. An owner admin or operator token can release any live lease without it.",
+		Description: "Drop this chat's claim so another agent can take the task. Pass claim_id. An owner admin token can release any live lease without it.",
 	}, h.release)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "review_url",

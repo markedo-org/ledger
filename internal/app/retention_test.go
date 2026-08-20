@@ -286,7 +286,10 @@ func TestResetLedgerWriteForbidden(t *testing.T) {
 	}
 }
 
-func TestResetLedgerOperator(t *testing.T) {
+// Emptying a ledger is the owner's call, not the host's. The operator can
+// create the tenant and can stop selling it capacity, but a token held by
+// whoever runs the machine must not be able to delete a customer's work.
+func TestResetLedgerIsTheOwnersCallNotTheOperators(t *testing.T) {
 	a, _ := boot(t)
 	a.SetOperatorToken("lgr_operator_reset")
 	ctx := context.Background()
@@ -309,15 +312,21 @@ func TestResetLedgerOperator(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, n, err := a.ResetLedger(ctx, op, "iq", "abusemanager", "iq/abusemanager")
+
+	if _, _, err := a.ResetLedger(ctx, op, "iq", "abusemanager", "iq/abusemanager"); !errors.Is(err, app.ErrForbidden) {
+		t.Fatalf("the operator emptied a customer's ledger, got %v", err)
+	}
+
+	// The owner's own admin still can, and the series starts over.
+	_, n, err := a.ResetLedger(ctx, ada, "iq", "abusemanager", "iq/abusemanager")
 	if err != nil || n != 1 {
-		t.Fatalf("operator reset n=%d %v", n, err)
+		t.Fatalf("owner admin reset n=%d %v", n, err)
 	}
 	fresh, _, err := a.Create(ctx, ada, "iq", "abusemanager", app.CreateInput{
 		Title: "Start over", IdempotencyKey: "iq-1",
 	})
 	if err != nil || fresh.Handle != "T-001" {
-		t.Fatalf("after operator reset %#v %v", fresh.Handle, err)
+		t.Fatalf("after reset %#v %v", fresh.Handle, err)
 	}
 }
 

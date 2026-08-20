@@ -78,7 +78,7 @@ func (a *App) CreateOwner(ctx context.Context, tok types.Token, in CreateOwnerIn
 	if actor == "" {
 		return out, nil
 	}
-	issued, err := a.CreateToken(ctx, tok, slug, CreateTokenInput{Actor: actor, Role: types.RoleAdmin, Email: in.Email})
+	issued, err := a.issueToken(ctx, tok, slug, CreateTokenInput{Actor: actor, Role: types.RoleAdmin, Email: in.Email})
 	if err != nil {
 		return out, err
 	}
