@@ -98,13 +98,15 @@ func (a *App) ConsumeReviewLink(ctx context.Context, code string) (types.Session
 	if err != nil {
 		return types.Session{}, "", err
 	}
-	// A review session reads, whatever minted it. The link is made to be
-	// pasted into a chat so a human can look at the board, which means it gets
-	// logged, forwarded and screen-shared, and an admin token used to hand its
-	// own powers to everyone downstream of that message. Reviewing is looking,
-	// so the word and the grant now agree. A handover with real powers would
-	// be a different feature with a different name.
-	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, types.RoleRead, tok.ID)
+	// The session inherits the minting token's role on purpose. This is how an
+	// agent hands its own human a way into their own board, and that human is
+	// usually the owner. Downgrading it to read-only would mean an owner whose
+	// agent is holding their admin token has to go and find another credential
+	// to change their own retention, which is friction bought with very little:
+	// the agent holding the token is already inside the same trust boundary as
+	// the chat the link is pasted into. Choose the power by choosing which
+	// token mints the link.
+	return a.CreateSession(ctx, tok.Actor, "", "", tok.OwnerSlug, tok.LedgerSlug, sessionRole(tok), tok.ID)
 }
 
 func (a *App) ConsumeMagicLink(ctx context.Context, code string) (types.Session, string, error) {

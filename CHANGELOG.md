@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.22.1
+
+Reverts the review link change in 0.22.0. A review session carries the role of
+the token that minted it again, which is how it worked up to 0.21.1.
+
+0.22.0 treated the link as something handed to an outside reviewer. It is
+mainly how an agent gives its own human a way into their own board, and that
+human is usually the owner. Read-only meant an owner whose agent is holding
+their admin token had to go and find another credential, or wait for a magic
+link by email, to change their own retention. That is friction bought with very
+little, since the agent holding the token is already inside the same trust
+boundary as the chat the link is pasted into.
+
+Choose the power by choosing which token mints the link: write to look, admin
+when the reader is the owner. `read` is no longer a role.
+
+Kept from 0.22.0: the owner page decides the Settings link per ledger, so it is
+not offered to sessions the handler will refuse, and it is not hidden from an
+admin bound to a single ledger.
+
 ## 0.22.0
 
 A review link now opens a read-only session, whatever token minted it.

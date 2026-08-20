@@ -83,7 +83,7 @@ Set `LEDGER_SECURE_COOKIES=1` behind HTTPS.
 | `POST /login` | Exchange a bearer token for a session cookie. Requires the CSRF field. |
 | `POST /login/email` | Request a magic link. Requires CSRF. Same copy whether the address is bound or not. |
 | `GET /login/email?code=` | Consume a one-time link. Sets the session cookie. |
-| `GET /login/review?code=` | Consume a one-time review code. Sets a read-only session cookie and redirects to the board. |
+| `GET /login/review?code=` | Consume a one-time review code. Sets a session cookie with the minting token's role and redirects to the board. |
 | `POST /v1/review` | Mint a review URL for the bearer token. Write tokens may. Operator secret may not. |
 | `GET /login/github` | Starts GitHub authorize |
 | `GET /auth/github/callback` | GitHub code → session |

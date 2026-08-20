@@ -93,12 +93,14 @@ token can also `release_task` any live lease without the `claim_id`.
 a browser for the human. Do not paste the bearer token. Do not put the URL
 in a task note. Write tokens may mint. The operator secret cannot.
 
-The session it opens is read-only, whatever token minted it. Minting from an
-admin token gives the reader a board they can read, not the settings that
-decide when finished work is deleted. This matters because the link is meant to
-be pasted into a chat, where it is logged, forwarded and screen-shared, so its
-powers belong to everyone who sees that message. If you want to hand someone
-real control, give them a token of their own.
+The session carries the same role as the token that minted it. That is what
+makes the link useful: it is how an agent hands its own human a way into their
+own board, and an owner should not have to go looking for another credential to
+change their own retention when their agent is holding the admin token already.
+
+Choose the power by choosing the token. Mint from a write token when the reader
+should only look, and from the admin token when they are the owner and may need
+to change something.
 
 `create_task` accepts optional `tags` (at most three lowercase slugs,
 same charset as owner slugs). `set_tags` replaces them; an empty list

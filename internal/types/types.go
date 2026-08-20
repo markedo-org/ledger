@@ -86,11 +86,6 @@ const (
 	RoleWrite    = "write"
 	RoleAdmin    = "admin"
 	RoleOperator = "operator"
-	// RoleRead belongs to a browser session, not to a token. Nothing mints a
-	// read token; it is what a review link becomes when it is opened, so the
-	// person reading the board cannot change it whatever the link was made
-	// from.
-	RoleRead = "read"
 )
 
 type Token struct {

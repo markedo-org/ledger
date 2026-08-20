@@ -141,7 +141,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.release)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "review_url",
-		Description: "Mint a one-time URL that opens the HTML board for a human to read. The session it creates is read-only whatever token minted it, including an admin one, so the link is safe to paste into a chat. Do not paste the bearer token. Do not put the URL in a task note. The link works once and expires in 15 minutes. Write tokens may mint.",
+		Description: "Mint a one-time URL that signs a browser into the HTML board as this token. Open it for the human. The session carries the same role as the token that minted it, so a link minted from an admin token can change ledger settings: mint from a write token when the reader should only look. Do not paste the bearer token. Do not put the URL in a task note. The link works once and expires in 15 minutes. Write tokens may mint.",
 	}, h.reviewURL)
 	s.AddResource(&mcp.Resource{
 		URI:         "ledger://live",
