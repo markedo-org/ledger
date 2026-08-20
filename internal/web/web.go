@@ -27,6 +27,7 @@ type Server struct {
 	tmpl    *template.Template
 	static  fs.FS
 	signIn  *signInGate
+	csp     string
 }
 
 func New(a *app.App) (*Server, error) {
@@ -42,11 +43,16 @@ func New(a *app.App) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	csp, err := buildCSP(sub)
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
 		App:    a,
 		tmpl:   tmpl,
 		static: static,
 		signIn: newSignInGate(loginAttempts, loginWindow),
+		csp:    csp,
 	}, nil
 }
 
@@ -64,7 +70,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) Engine() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(gin.Recovery(), securityHeaders(s.csp))
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.20.0
+
+The app now sends its own security headers, including a content policy. They
+used to come from the example nginx config, so anyone running the binary
+without our proxy in front got none of them, and the content policy did not
+exist anywhere.
+
+The policy is strict: no inline script, no eval, nothing framed, nothing
+loading from anywhere but this host and the font service. It is built at start
+from the templates themselves, so the hash that allows the theme script follows
+the script if it is edited. A hash written down as a constant would go stale
+quietly, and the page would look right to whoever changed it while losing its
+theme for everyone arriving fresh.
+
+The example nginx configs no longer repeat the three headers the app now sends,
+and carry `Strict-Transport-Security` instead, commented out in the generic one.
+HSTS is the proxy's business: the app also serves plain http on localhost,
+where claiming TLS would be wrong.
+
 ## 0.19.0
 
 A claim is now conditional on the state it was decided from, so two agents can
