@@ -125,10 +125,13 @@ if ! id -u ledger >/dev/null 2>&1; then
 fi
 sudo mkdir -p "$REMOTE_DIR"
 sudo chown ledger:ledger "$REMOTE_DIR"
+# The database lives here, so keep the directory to the service user. Anything
+# below that has to look inside must ask through sudo.
+sudo chmod 0750 "$REMOTE_DIR"
 sudo install -o ledger -g ledger -m 0755 "$HOME/ledger-bin" "$REMOTE_DIR/ledger"
 rm -f "$HOME/ledger-bin"
 
-if [[ ! -f "$REMOTE_DIR/ledger.env" ]]; then
+if ! sudo test -f "$REMOTE_DIR/ledger.env"; then
   sudo install -o root -g ledger -m 0640 "$HOME/ledger.env.incoming" "$REMOTE_DIR/ledger.env"
 else
   echo "keeping existing $REMOTE_DIR/ledger.env"
@@ -144,6 +147,8 @@ After=network.target
 Type=simple
 User=ledger
 Group=ledger
+# The database is customer data. Without this it is created world readable.
+UMask=0027
 WorkingDirectory=$REMOTE_DIR
 EnvironmentFile=$REMOTE_DIR/ledger.env
 ExecStart=$REMOTE_DIR/ledger -listen $LISTEN -db $REMOTE_DIR/ledger.sqlite
@@ -292,7 +297,9 @@ else
   echo "==> Install binary and restart $UNIT_NAME"
   ssh -i "$KEY" "$USER_HOST" "REMOTE_DIR=$REMOTE_DIR UNIT_NAME=$UNIT_NAME bash -s" <<'REMOTE'
 set -euo pipefail
-if [[ ! -x "$REMOTE_DIR/ledger" && ! -f "$REMOTE_DIR/ledger.env" ]]; then
+# Asked through sudo because the directory is the service user's and closed to
+# everyone else: a plain test here reports "missing" for a file that is there.
+if ! sudo test -x "$REMOTE_DIR/ledger" && ! sudo test -f "$REMOTE_DIR/ledger.env"; then
   echo "error: $REMOTE_DIR is not bootstrapped; re-run with --bootstrap" >&2
   exit 1
 fi

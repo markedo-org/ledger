@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.1
+
+The deploy script now keeps the install directory to the service user, `0750`,
+and sets `UMask=0027` on the unit. The database is customer data and was being
+created world readable on the host.
+
+Its two checks for an existing install ask through `sudo`, because a directory
+closed that way answers "missing" to anyone else. Without that the script
+refuses to deploy over a healthy install, and the bootstrap path would have
+overwritten an existing `ledger.env`.
+
 ## 0.20.0
 
 The app now sends its own security headers, including a content policy. They
