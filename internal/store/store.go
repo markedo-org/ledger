@@ -689,6 +689,12 @@ func (s *Store) SetCheck(ctx context.Context, taskID, actor, checkID string, don
 		if _, err := tx.ExecContext(ctx, `UPDATE checks SET done = ? WHERE id = ?`, doneInt, checkID); err != nil {
 			return err
 		}
+		// Ticking a check changes the task, so it counts as a version: anyone
+		// holding a stale read of this task is holding a stale read.
+		if _, err := tx.ExecContext(ctx, `UPDATE tasks SET version = version + 1, updated_at = ? WHERE id = ?`,
+			fmtTime(now()), taskID); err != nil {
+			return err
+		}
 		payload, _ := json.Marshal(map[string]any{"n": n, "body": body, "done": done})
 		if _, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
 			t.LedgerID, t.ID, actor, "check", string(payload), fmtTime(now())); err != nil {

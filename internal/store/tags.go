@@ -33,6 +33,10 @@ func (s *Store) SetTags(ctx context.Context, taskID, actor string, tags []string
 		if err := replaceTagsTx(ctx, tx, taskID, tags); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `UPDATE tasks SET version = version + 1, updated_at = ? WHERE id = ?`,
+			fmtTime(now()), taskID); err != nil {
+			return err
+		}
 		payload, _ := json.Marshal(map[string]any{"tags": tags})
 		if _, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
 			t.LedgerID, t.ID, actor, "tags", string(payload), fmtTime(now())); err != nil {

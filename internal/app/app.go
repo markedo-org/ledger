@@ -299,10 +299,16 @@ func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle 
 		h := store.HashToken(plain)
 		hash = &h
 	}
+	// Everything above was decided from a task we read a moment ago, outside
+	// any transaction. Two agents reading the same unclaimed task both get
+	// here, both mint a claim_id and both believe they hold it. Requiring the
+	// version we read means the second write finds the row already moved on
+	// and comes back a conflict, which is the answer the lease exists to give.
 	out, err := a.Store.Mutate(ctx, t.ID, tok.Actor, kind, payload, store.MutateTask{
 		ClaimedBy:       &actor,
 		ClaimedUntil:    &until,
 		ClaimSecretHash: hash,
+		Version:         t.Version,
 	})
 	if errors.Is(err, store.ErrConflict) {
 		return out, ErrConflict
@@ -547,7 +553,14 @@ func (a *App) Next(ctx context.Context, tok types.Token, owner, ledger, prefix s
 		if len(t.DependsOn) > 0 {
 			continue // v1: skip blocked; full DAG check later
 		}
-		return a.Claim(ctx, tok, owner, ledger, t.Handle, ClaimInput{TTL: ttl})
+		out, err := a.Claim(ctx, tok, owner, ledger, t.Handle, ClaimInput{TTL: ttl})
+		// Someone else took this one between our listing it and our claiming
+		// it. That is not a failure of the request: ask for the next task and
+		// you should get a task, so try the one after it.
+		if errors.Is(err, ErrConflict) {
+			continue
+		}
+		return out, err
 	}
 	return types.Task{}, fmt.Errorf("%w: no eligible task", ErrNotFound)
 }

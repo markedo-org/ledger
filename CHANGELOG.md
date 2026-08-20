@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.19.0
+
+A claim is now conditional on the state it was decided from, so two agents can
+no longer come away holding the same lease. Claiming read the task, judged it
+free and then wrote, and those three steps were not one step: agents reading
+the same unclaimed task all passed the check and all wrote, and every one of
+them was handed a claim_id and a success. The loser found out only when its
+next write was refused, after the duplicate work was done. A test with eight
+agents on one task used to report eight winners.
+
+The guard is the `version` column, which the store already knew how to check
+and nothing passed. A claim now carries the version it read and a stale one
+comes back a conflict.
+
+`next_task` no longer gives up when it loses that race. Losing a candidate is
+not a reason to answer "no eligible task" while others are waiting, so it moves
+on to the next one. Two agents asking at the same moment get one task each.
+
+Ticking a check or changing tags now bumps the task version and `updated_at`.
+Both changed the task while leaving it looking untouched, so a read taken
+before either still looked current.
+
 ## 0.18.1
 
 The mail `FROM` may now carry a display name, so a sign-in link arrives from
