@@ -70,6 +70,10 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) Engine() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	if err := r.SetTrustedProxies(trustedProxies()); err != nil {
+		log.Printf("trusted proxies: %v, falling back to the peer address", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 	r.Use(gin.Recovery(), securityHeaders(s.csp))
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})

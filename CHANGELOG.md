@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.21.1
+
+The sign-in rate limit counted attempts against an address the caller chooses.
+
+Gin trusts every proxy unless told otherwise, so it read the leftmost
+`X-Forwarded-For` entry, and nothing writes that entry but the client. Sending
+a different value each time bought a fresh allowance each time, which left
+bearer tokens, magic codes and review codes with nothing counting guesses
+against them. Putting someone else's address there was worse: it spent their
+allowance and locked them out of their own sign-in from an address they do not
+control.
+
+Loopback is now the only peer trusted by default, which is nginx and the binary
+on one host. `LEDGER_TRUSTED_PROXIES` takes comma-separated CIDRs for a proxy
+that runs elsewhere or a CDN in front. A request from anywhere else is counted
+against the address the listener actually saw, so a directly exposed binary is
+safe without configuration.
+
 ## 0.21.0
 
 Breaking. The operator token is a provisioning credential now, not a master key.

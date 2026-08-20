@@ -2,6 +2,8 @@ package web
 
 import (
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,6 +67,28 @@ func (g *signInGate) sweep(cutoff time.Time) {
 			delete(g.hits, k)
 		}
 	}
+}
+
+// trustedProxies is what gin is allowed to believe when it reads
+// X-Forwarded-For. Gin's default is to trust every proxy, which means it takes
+// the leftmost entry, and that entry is written by whoever is calling. An
+// attacker varies it per request and never meets the sign-in limit; worse,
+// they can put a victim's address there and lock that person out of their own
+// account. Naming the hop we actually run makes gin walk the header from the
+// right instead, past the addresses our own proxy appended.
+//
+// Loopback covers the shipped layout, nginx and the binary on one host. A
+// proxy elsewhere, or a CDN in front, goes in LEDGER_TRUSTED_PROXIES as
+// comma-separated CIDRs. An empty list is the safe answer for a binary exposed
+// directly: no forwarded header is believed at all.
+func trustedProxies() []string {
+	out := []string{"127.0.0.1/32", "::1/128"}
+	for _, p := range strings.Split(os.Getenv("LEDGER_TRUSTED_PROXIES"), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (s *Server) throttleSignIn(c *gin.Context) {
