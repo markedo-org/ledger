@@ -14,7 +14,11 @@ Not stdio. Not a wrapper around a CLI. Not the legacy SSE transport.
 
 The `ledger` process must be listening. Cursor tries Streamable HTTP first, then
 falls back to SSE when that fetch fails. `ECONNREFUSED` means the process is
-down, not that we serve SSE. Start it with `make run`.
+down, not that we serve SSE.
+
+From a release binary or `go install`: `ledger serve` (flags: `-listen`,
+`-db`, `-boot-owner`, `-boot-ledger`, `-boot-actor`). From a clone:
+`make run` builds and listens on `127.0.0.1:8080` with `ledger.sqlite`.
 
 ## Cursor / Claude Code config
 

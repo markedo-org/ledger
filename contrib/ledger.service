@@ -6,9 +6,13 @@ After=network.target
 Type=simple
 User=ledger
 Group=ledger
+# The database sits next to the binary and is your users' data. Without this
+# it is created world readable on the host.
+UMask=0027
 WorkingDirectory=/opt/ledger
 EnvironmentFile=/opt/ledger/ledger.env
-# 8080 is taken on VPS Services (domain-retailer / Trackveil).
+# 8787 rather than 8080 because something else already had 8080 on the host
+# this was written for. Use whichever port is free on yours.
 ExecStart=/opt/ledger/ledger -listen 127.0.0.1:8787 -db /opt/ledger/ledger.sqlite
 Restart=on-failure
 RestartSec=2

@@ -66,19 +66,20 @@ OAuth. A bearer token is enough to dogfood and to self-host. API and MCP use
 - SQLite in WAL, one process. `max_ledgers` on the owner is the meter.
   Stripe is not in this binary. See [`provisioning.md`](provisioning.md).
 
-## Meter and provisioning (next slice)
+## Meter and provisioning
 
 Ledger owns the meter. The hosted site owns money. Same binary, same port.
-Self-hosters call the same operator routes we will call from
+Self-hosters call the same operator routes Markedo calls from
 `www.task-ledger.com`.
 
 - Host-level operator token (not owner `admin`): create owners, create
-  ledgers, set `max_ledgers` (floor 1). Optional HTML admin page later.
+  ledgers, set `max_ledgers` (`0` is unlimited on set; create defaults to 1).
+  HTML `/admin` on the same process.
 - Overflow freeze: when cap is below ledger count, newest ledgers are
   read-only; oldest `max_ledgers` stay writable. Same-second creates follow
   insert order. Derive, do not store a flag.
-- Stripe, webhooks, and the provisioning client come after that API exists.
-  Working hosted prices live in `provisioning.md`.
+- Stripe, webhooks, and the provisioning client are on the brochure, not in
+  this binary. Working hosted prices live in `provisioning.md`.
 
 ## Out of v1
 

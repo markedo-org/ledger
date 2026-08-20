@@ -34,8 +34,9 @@ enough.
   callback URL. They cannot reuse Markedo's app.
 
 The hosted Markedo app is registered on `markedo-org`. Callback:
-`https://task-ledger.com/auth/github/callback`. Allowlist starts at
-`lgforsberg`. Client ID and secret stay in env, never in git.
+`https://task-ledger.com/auth/github/callback`. Allowlist is a comma-separated
+list of GitHub logins (for example `octocat`). Client ID and secret stay in
+env, never in git.
 
 ### GitHub OAuth App (operator)
 
@@ -53,7 +54,7 @@ LEDGER_OPERATOR_TOKEN=
 LEDGER_GITHUB_CLIENT_ID=
 LEDGER_GITHUB_CLIENT_SECRET=
 LEDGER_GITHUB_CALLBACK_URL=https://<domain>/auth/github/callback
-LEDGER_GITHUB_ALLOWLIST=you
+LEDGER_GITHUB_ALLOWLIST=octocat
 LEDGER_SECURE_COOKIES=1
 LEDGER_PUBLIC_URL=https://<domain>
 LEDGER_SMTP_HOST=
@@ -110,8 +111,9 @@ LEDGER_OPERATOR_TOKEN=
 
 ## Magic-link email (optional)
 
-Off until SMTP is fully set (`LEDGER_SMTP_HOST`, `USER`, `PASS`, and `FROM`;
-`FROM` defaults to `USER`). There is still no user table. Bind an email when
+Off until SMTP is fully set (`LEDGER_SMTP_HOST`, `LEDGER_SMTP_USER`,
+`LEDGER_SMTP_PASS`, and `LEDGER_SMTP_FROM`; `LEDGER_SMTP_FROM` defaults to
+`LEDGER_SMTP_USER`). There is still no user table. Bind an email when
 you mint a token (`email` on `POST /v1/:owner/tokens`, the admin form, or MCP
 `create_token`). One address per token. The link wraps that token into the
 same session cookie as paste-to-login. The API token never goes in the mail.
@@ -125,10 +127,11 @@ same session cookie as paste-to-login. The API token never goes in the mail.
   it.
 - `LEDGER_PUBLIC_URL` is the base of the link (default `http://127.0.0.1:8080`).
 - The operator env token has no email. Paste it at `/login`.
-- `FROM` may carry a display name, `Task Ledger <hello@example.com>`. The
-  envelope sender is the bare address inside it. A `FROM` with no address at all
-  leaves mail off rather than failing at every send, which is why `FROM`
-  defaulting to a `USER` like `resend` does not count as configured.
+- `LEDGER_SMTP_FROM` may carry a display name, `Task Ledger <hello@example.com>`.
+  The envelope sender is the bare address inside it. A `LEDGER_SMTP_FROM` with
+  no address at all leaves mail off rather than failing at every send, which is
+  why `LEDGER_SMTP_FROM` defaulting to a `LEDGER_SMTP_USER` like `resend` does
+  not count as configured.
 
 Use a sending domain you control, with SPF and DKIM set up at your mail
 provider, and an address on that domain. A personal mailbox as the sender lands

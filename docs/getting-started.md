@@ -149,9 +149,11 @@ The install-and-loop proof we rerun before a release is
 
 ## Next: a server you operate
 
-Same binary. `ledger init` on the box, or `ledger owner create` against it
-with the operator token. Then [deploy.md](deploy.md) for systemd, nginx,
-TLS, and backups.
+Same binary. On the box, `ledger init` writes `~/.ledger/config` and prints the
+token, or start `ledger serve` and read the one-time `<dbpath>.boot-token` file
+it leaves beside the database. Against a server that is already running, use
+`ledger owner create` with the operator token. [deploy.md](deploy.md) covers
+all three, plus systemd, nginx, TLS, and backups.
 
 ## Next: hosted
 

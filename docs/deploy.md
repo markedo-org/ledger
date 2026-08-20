@@ -6,7 +6,8 @@ front. For a laptop and a first owner, start with
 
 ## Self-host
 
-1. `make linux-amd64` (or `make build` on the box).
+1. `make linux-amd64` (or `make build` on the box), or download a release
+   binary from [GitHub Releases](https://github.com/markedo-org/ledger/releases).
 2. Copy the binary to something like `/opt/ledger/ledger`.
 3. Copy [`contrib/ledger.service`](../contrib/ledger.service) to systemd.
    Adjust the listen address if `8080` is free on your box. Markedo's unit
@@ -40,8 +41,31 @@ DONE retention defaults (`LEDGER_ARCHIVE_DONE_AFTER_DAYS=7`,
 `LEDGER_PURGE_DONE_AFTER_DAYS=0`). `0` means never. Hosted should leave purge
 at `0`. A ledger can override with `ledger ledger set`.
 
+## First boot
+
 A fresh database boots `acme/inbox` with actor `ada` unless you pass
 `-boot-owner`, `-boot-ledger`, `-boot-actor`.
+
+Production usually skips `ledger init` and lets the first `ledger serve` create
+the database. Start the unit once with the env file in place. If
+`LEDGER_BOOT_TOKEN` is set, as recommended above, that value is the boot token
+and there is nothing to collect. If it is not set, the server mints one and
+writes it to `<dbpath>.boot-token`, mode `0600`, beside the SQLite file. The
+journal line names the path rather than the token.
+
+Point the CLI at it from your laptop, or over SSH from the box:
+
+```bash
+ledger config set url https://ledger.example
+ledger config set token "$(cat /opt/ledger/ledger.sqlite.boot-token)"
+ledger config set owner acme    # or your -boot-owner
+ledger config set ledger inbox  # or your -boot-ledger
+```
+
+Keep the token somewhere safe and delete the file. From there, sign in at
+`/login` or run `ledger mcp print` to configure MCP. Changing
+`LEDGER_BOOT_TOKEN` afterwards does not rotate the stored token: the boot token
+is only read on an empty database.
 
 ## Markedo hosted
 

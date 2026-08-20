@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.20.2
+
+Documentation only. The docs described shipped work as future work, which left
+a reader unable to tell what the product does today.
+
+Operator provisioning, the `/admin` page and overflow freeze are written as
+things that exist, because they do. `max_ledgers` is documented as the code
+behaves: `0` means unlimited when you set it, `0` on create becomes 1, and a
+negative value is refused. The old text said the floor was 1, so an operator
+following it would never have found the unlimited setting.
+
+Self-host gained the step it was missing. Starting `serve` on an empty database
+without `LEDGER_BOOT_TOKEN` writes the token to a file beside the database, and
+nothing walked the reader from that file to a working CLI or MCP. `docs/mcp.md`
+no longer tells someone who installed a binary to start the server with a
+`make` target they do not have.
+
+The SMTP variables are named in full rather than as `HOST` and `PASS`, the
+example GitHub allowlist is a placeholder rather than a maintainer's handle,
+and the example systemd unit sets `UMask=0027`, without which the database is
+created world readable on the host.
+
 ## 0.20.1
 
 The deploy script now keeps the install directory to the service user, `0750`,
