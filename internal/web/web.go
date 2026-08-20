@@ -664,12 +664,24 @@ func (s *Server) htmlOwner(c *gin.Context) {
 	if o.MaxLedgers > 0 && o.MaxLedgers > used {
 		unused = o.MaxLedgers - used
 	}
+	// Decided per row. An owner-wide admin manages all of them, an admin bound
+	// to one ledger manages that one, and everybody else manages none. Asking
+	// the owner-wide question once and reusing the answer is what left the page
+	// offering Settings to sessions the handler then refused.
+	type ledgerRow struct {
+		app.LedgerInfo
+		CanManage bool
+	}
+	rows := make([]ledgerRow, 0, len(ledgers))
+	for _, l := range ledgers {
+		rows = append(rows, ledgerRow{LedgerInfo: l, CanManage: canManageLedger(sess, signedIn, owner, l.Slug)})
+	}
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(c.Writer, "owner", s.page(c, gin.H{
 		"Title":         owner,
 		"Owner":         owner,
-		"Ledgers":       ledgers,
+		"Ledgers":       rows,
 		"MaxLedgers":    o.MaxLedgers,
 		"Used":          used,
 		"Unused":        unused,

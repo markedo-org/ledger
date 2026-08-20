@@ -41,7 +41,7 @@
         </span>
         {{end}}
       </a>
-      {{if or $.CanManage (eq $.SessionLedger .Slug)}}<a class="tune" href="/{{$.Owner}}/{{.Slug}}/settings">Settings</a>{{end}}
+      {{if .CanManage}}<a class="tune" href="/{{$.Owner}}/{{.Slug}}/settings">Settings</a>{{end}}
     </div>
   </li>
   {{end}}

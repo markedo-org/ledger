@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.22.0
+
+A review link now opens a read-only session, whatever token minted it.
+
+It did what its description said, which was the problem: the browser inherited
+the minting token's role, so a link made from an admin token let whoever opened
+it rewrite retention, the setting that decides when finished work is deleted.
+The link exists so an agent can show a human the board without handing over a
+bearer token, and it is meant to be pasted into a chat, where it is logged,
+forwarded and screen-shared. Reviewing is looking, so the word and the grant
+now agree. Handing over real control means giving someone a token of their own.
+
+Read is a session role only. Nothing mints a read token, and the API is
+unchanged.
+
+Also, the owner page decides the Settings link per ledger instead of asking the
+owner-wide question once and reusing the answer. It used to offer Settings to
+any session bound to that ledger, including write sessions the handler then
+refused with a 403.
+
 ## 0.21.1
 
 The sign-in rate limit counted attempts against an address the caller chooses.
