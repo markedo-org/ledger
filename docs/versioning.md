@@ -34,8 +34,8 @@ Renaming or removing the list above is not.
 | --- | --- | --- |
 | 1 | Every shipped `VERSION` has a matching `v*` tag on `main` | Done |
 | 2 | GitHub Releases for darwin/arm64, linux/amd64, windows/amd64. Getting Started can say download the binary or `go install …@v1.0.0` | Done. Each tag has release assets on GitHub |
-| 3 | Local loop proven: `make smoke` exits 0. See [smoke.md](smoke.md): init writes `.cursor/mcp.json`, HTTP create/claim/note/close, MCP work loop on `/mcp` | Protocol is `make smoke` + `go test ./internal/workloop` |
-| 4 | Hosted signup and at least one extra ledger used for real work | In progress (operator) |
+| 3 | Local loop proven: `make smoke` exits 0. See [smoke.md](smoke.md): init writes `.cursor/mcp.json`, HTTP create/claim/note/close, MCP work loop on `/mcp` | Done. `make smoke` and `go test ./internal/workloop` both pass |
+| 4 | Hosted signup and at least one extra ledger used for real work | Done. Signup, checkout and the cap mapping run end to end, and a paying owner works a second, paid ledger |
 | 5 | We are willing to stop renaming the stable list above | Done |
 
 **Not required for 1.0:**
