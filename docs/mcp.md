@@ -102,6 +102,21 @@ Choose the power by choosing the token. Mint from a write token when the reader
 should only look, and from the admin token when they are the owner and may need
 to change something.
 
+`verify_task` records your actor as the verifier, and closing a task records
+yours as the closer. Both come back from `get_task` as `verified_by` and
+`closed_by`, and the board shows them, saying so plainly when they are the same
+actor.
+
+Verifying your own work is allowed. A ledger with one agent on it would
+otherwise never reach verified, and refusing it would only push people to swap
+actor names. The point is that it is visible, so "verified" can be read for
+what it is rather than taken on trust. Prefer a different actor from the one
+that did the work when there is one.
+
+Verify takes no `claim_id` and does not check the lease, unlike close and the
+check and tag setters. That is deliberate: the reviewer is usually not the
+agent holding the task.
+
 `create_task` accepts optional `tags` (at most three lowercase slugs,
 same charset as owner slugs). `set_tags` replaces them; an empty list
 clears. `list_tasks` accepts one `tag` to keep tasks with that slug.

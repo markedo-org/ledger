@@ -129,7 +129,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.closeTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "verify_task",
-		Description: "Mark a task as verified now. Use after reviewing a closed or standing task. Does not close it.",
+		Description: "Mark a task as verified now. Use after reviewing a closed or standing task. Does not close it. Your actor is recorded as the verifier and shown on the board, so verifying your own work is allowed but visible; prefer a different actor from the one that did the work.",
 	}, h.verify)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "heartbeat_task",
@@ -787,6 +787,18 @@ func taskMap(t types.Task) map[string]any {
 	}
 	if t.VerifiedAt != nil {
 		m["verified_at"] = t.VerifiedAt.UTC().Format(time.RFC3339)
+	}
+	if t.VerifiedBy != "" {
+		m["verified_by"] = t.VerifiedBy
+	}
+	if t.ClosedBy != "" {
+		m["closed_by"] = t.ClosedBy
+	}
+	if len(t.DependsOn) > 0 {
+		// The HTTP API has always returned these. Leaving them out of the MCP
+		// shape meant an agent working through MCP could not see that a task
+		// was blocked at all.
+		m["depends_on"] = append([]string{}, t.DependsOn...)
 	}
 	if t.ClosedAt != nil {
 		m["closed_at"] = t.ClosedAt.UTC().Format(time.RFC3339)

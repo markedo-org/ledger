@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.23.0
+
+A task now records who closed it and who verified it.
+
+Verify is the product's quality gate and it wrote nothing to the task about who
+passed it, so an agent that closed its own work and verified it a second later
+was indistinguishable from a second pair of eyes. The actor was in the event
+log, which nothing surfaces. Tasks gain `closed_by` and `verified_by`, both
+returned by the API and `get_task`, and the board shows them, saying plainly
+when the verifier is the actor who closed it.
+
+Self-verification stays allowed. A ledger with one agent on it would otherwise
+never reach verified, and refusing it would only push people to swap actor
+names. Making it visible is the honest fix.
+
+`get_task` also returns `depends_on`, which the HTTP API has always returned.
+Leaving it out meant an agent working through MCP could not see that a task was
+blocked at all.
+
+Both columns arrive by migration on existing databases, rehearsed by a test
+that writes a task, removes the columns, and reopens the database the way a
+deploy does.
+
 ## 0.22.1
 
 Reverts the review link change in 0.22.0. A review session carries the role of

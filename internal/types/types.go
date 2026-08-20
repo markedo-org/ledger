@@ -119,19 +119,26 @@ type TokenInfo struct {
 func (t TokenInfo) Revoked() bool { return t.RevokedAt != nil }
 
 type Task struct {
-	ID              string
-	LedgerID        string
-	SeriesID        string
-	N               int
-	Handle          string
-	Title           string
-	Body            string
-	Phase           Phase
-	Size            Size
-	Rank            int
-	Version         int
-	Pushed          int
-	VerifiedAt      *time.Time
+	ID         string
+	LedgerID   string
+	SeriesID   string
+	N          int
+	Handle     string
+	Title      string
+	Body       string
+	Phase      Phase
+	Size       Size
+	Rank       int
+	Version    int
+	Pushed     int
+	VerifiedAt *time.Time
+	// VerifiedBy is the actor that called verify, and ClosedBy the actor that
+	// closed the task. Both are recorded so a reader can see whether the work
+	// was checked by someone other than whoever did it. Self-verification is
+	// allowed, because a ledger with one agent on it would otherwise never
+	// reach verified, but it is no longer invisible.
+	VerifiedBy      string
+	ClosedBy        string
 	Since           time.Time
 	Ref             string
 	GateSignoff     bool

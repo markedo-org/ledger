@@ -108,7 +108,7 @@ on the body. Create requires `idempotency_key` (JSON or header
 | POST | `/v1/:owner/:ledger/tasks/:handle/checks` | Tick or untick a check |
 | POST | `/v1/:owner/:ledger/tasks/:handle/tags` | Replace tags |
 | POST | `/v1/:owner/:ledger/tasks/:handle/close` | Close (`evidence` required) |
-| POST | `/v1/:owner/:ledger/tasks/:handle/verify` | Refresh verified date |
+| POST | `/v1/:owner/:ledger/tasks/:handle/verify` | Refresh verified date, recording your actor as the verifier |
 | POST | `/v1/:owner/:ledger/next` | Claim the next eligible NOW task |
 
 Handles are `T-001` (one-letter series, default `T`). Default lease is 30

@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   version INTEGER NOT NULL DEFAULT 1,
   pushed INTEGER NOT NULL DEFAULT 0,
   verified_at TEXT,
+  verified_by TEXT NOT NULL DEFAULT '',
+  closed_by TEXT NOT NULL DEFAULT '',
   since TEXT NOT NULL,
   ref TEXT NOT NULL DEFAULT '',
   gate_signoff INTEGER NOT NULL DEFAULT 0,

@@ -13,6 +13,12 @@
   {{if .Task.ClaimedBy}}
   <p class="row-meta"><span class="pill">held by {{.Task.ClaimedBy}} until {{.ClaimUntil}}</span></p>
   {{end}}
+  {{if or .Task.ClosedBy .Task.VerifiedBy}}
+  <p class="row-meta">
+    {{if .Task.ClosedBy}}<span class="pill">closed by {{.Task.ClosedBy}}</span>{{end}}
+    {{if .Task.VerifiedBy}}<span class="pill">verified by {{.Task.VerifiedBy}}{{if .SelfVerified}}, who also closed it{{end}}</span>{{end}}
+  </p>
+  {{end}}
   {{if .Task.Body}}<div class="prose">{{.Task.Body}}</div>{{end}}
   {{if .Task.Checks}}
   <h2 class="phase">Checks</h2>

@@ -517,10 +517,15 @@ func (a *App) Close(ctx context.Context, tok types.Token, owner, ledger, handle,
 	}
 	phase := types.PhaseDONE
 	now := time.Now().UTC()
+	// Closing clears the claim, so without this the task keeps no record of
+	// who did the work and "verified by" would be a name with nothing to
+	// compare it against.
+	by := tok.Actor
 	return a.Store.Mutate(ctx, t.ID, tok.Actor, "close", map[string]string{"evidence": evidence}, store.MutateTask{
 		Phase:      &phase,
 		Evidence:   &evidence,
 		ClosedAt:   &now,
+		ClosedBy:   &by,
 		ClearClaim: true,
 	})
 }
@@ -531,7 +536,13 @@ func (a *App) Verify(ctx context.Context, tok types.Token, owner, ledger, handle
 		return t, err
 	}
 	now := time.Now().UTC()
-	return a.Store.Mutate(ctx, t.ID, tok.Actor, "verify", map[string]string{}, store.MutateTask{VerifiedAt: &now})
+	// Record who did it. Verify is the product's quality gate and it used to
+	// leave no trace on the task of who passed it, so an agent closing its own
+	// work and verifying it a second later looked exactly like a second pair
+	// of eyes. Self-verification is still allowed: a ledger with one agent on
+	// it would otherwise never reach verified. It is just no longer invisible.
+	by := tok.Actor
+	return a.Store.Mutate(ctx, t.ID, tok.Actor, "verify", map[string]string{}, store.MutateTask{VerifiedAt: &now, VerifiedBy: &by})
 }
 
 func (a *App) Next(ctx context.Context, tok types.Token, owner, ledger, prefix string, ttl time.Duration) (types.Task, error) {

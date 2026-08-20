@@ -77,6 +77,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE ledgers ADD COLUMN archive_done_after_days INTEGER`,
 		`ALTER TABLE ledgers ADD COLUMN purge_done_after_days INTEGER`,
 		`ALTER TABLE tasks ADD COLUMN claim_id_hash TEXT`,
+		`ALTER TABLE tasks ADD COLUMN verified_by TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN closed_by TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS task_tags (
   task_id TEXT NOT NULL REFERENCES tasks(id),
   slug TEXT NOT NULL,
@@ -465,10 +467,10 @@ func getTaskTx(ctx context.Context, tx *sql.Tx, id string) (types.Task, error) {
 	var since, created, updated string
 	var signoff, third, decision, gateTime int
 	err := tx.QueryRowContext(ctx, `SELECT id, ledger_id, series_id, n, handle, title, body, phase, size, rank, version, pushed,
-		verified_at, since, ref, gate_signoff, gate_third, gate_decision, gate_time, claimed_by, claimed_until, claim_id_hash, evidence, closed_at, created_at, updated_at
+		verified_at, verified_by, closed_by, since, ref, gate_signoff, gate_third, gate_decision, gate_time, claimed_by, claimed_until, claim_id_hash, evidence, closed_at, created_at, updated_at
 		FROM tasks WHERE id = ?`, id).Scan(
 		&t.ID, &t.LedgerID, &t.SeriesID, &t.N, &t.Handle, &t.Title, &t.Body, &phase, &size, &t.Rank, &t.Version, &t.Pushed,
-		&verified, &since, &t.Ref, &signoff, &third, &decision, &gateTime, &claimedBy, &claimedUntil, &claimHash, &evidence, &closed, &created, &updated)
+		&verified, &t.VerifiedBy, &t.ClosedBy, &since, &t.Ref, &signoff, &third, &decision, &gateTime, &claimedBy, &claimedUntil, &claimHash, &evidence, &closed, &created, &updated)
 	if err != nil {
 		return t, err
 	}
@@ -563,6 +565,8 @@ type MutateTask struct {
 	Evidence        *string
 	ClosedAt        *time.Time
 	VerifiedAt      *time.Time
+	VerifiedBy      *string
+	ClosedBy        *string
 	Version         int
 }
 
@@ -619,6 +623,14 @@ func (s *Store) Mutate(ctx context.Context, taskID, actor, kind string, payload 
 		if m.VerifiedAt != nil {
 			sets = append(sets, "verified_at = ?")
 			args = append(args, fmtTime(*m.VerifiedAt))
+		}
+		if m.VerifiedBy != nil {
+			sets = append(sets, "verified_by = ?")
+			args = append(args, *m.VerifiedBy)
+		}
+		if m.ClosedBy != nil {
+			sets = append(sets, "closed_by = ?")
+			args = append(args, *m.ClosedBy)
 		}
 		args = append(args, taskID)
 		q := `UPDATE tasks SET ` + strings.Join(sets, ", ") + ` WHERE id = ?`

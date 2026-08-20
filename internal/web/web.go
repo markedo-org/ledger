@@ -795,6 +795,10 @@ func (s *Server) htmlTask(c *gin.Context) {
 		"Frozen":     frozen,
 		"Task":       t,
 		"ClaimUntil": until,
+		// Verified means something different when the same actor closed the
+		// task and then passed it, so say so rather than leaving the reader to
+		// compare two names.
+		"SelfVerified": t.VerifiedBy != "" && t.VerifiedBy == t.ClosedBy,
 	})
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
