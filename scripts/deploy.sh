@@ -14,25 +14,38 @@ REMOTE_DIR="/opt/ledger"
 UNIT_NAME="ledger"
 
 BOOTSTRAP=0
-if [[ "${1:-}" == "--bootstrap" ]]; then
-  BOOTSTRAP=1
-elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  cat <<'EOF'
-Usage: scripts/deploy.sh [--bootstrap]
+ALLOW_DIRTY=0
+SKIP_TESTS=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --bootstrap) BOOTSTRAP=1 ;;
+    --allow-dirty) ALLOW_DIRTY=1 ;;
+    --skip-tests) SKIP_TESTS=1 ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/deploy.sh [--bootstrap] [--allow-dirty] [--skip-tests]
 
-  Cross-compiles linux/amd64, copies the binary to VPS Services, restarts systemd.
+  Runs the test suite, refuses a dirty tree, cross-compiles linux/amd64, copies
+  the binary to VPS Services, restarts systemd.
 
-  --bootstrap   First time: ledger user, /opt/ledger, env file, nginx, certbot.
-                Does not overwrite an existing ledger.env.
+  --bootstrap    First time: ledger user, /opt/ledger, env file, nginx, certbot.
+                 Does not overwrite an existing ledger.env.
+  --allow-dirty  Ship uncommitted work anyway. The build is stamped +dirty so
+                 the running version says it does not match any commit.
+  --skip-tests   Ship without running the suite. For an outage, not for haste.
 
   Listen address defaults to 127.0.0.1:8787 (8080 is taken on this box).
   Override with LEDGER_LISTEN.
 EOF
-  exit 0
-elif [[ -n "${1:-}" ]]; then
-  echo "error: unknown argument $1" >&2
-  exit 1
-fi
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 if [[ -f "$META_ROOT/.env" ]]; then
   set -a
@@ -51,12 +64,37 @@ KEY="${HETZNER_SSH_IDENTITY:-$HOME/.ssh/id_rsa}"
 USER_HOST="${HETZNER_SSH_USER:-lg}@$HOST_IP"
 SECRETS="$META_ROOT/.secrets/task-ledger-hosted.env"
 
-echo "==> Build linux/amd64"
+# What is on disk is what ships, so say out loud when that is not a commit and
+# refuse to ship code the suite has not seen. The version string is the only
+# thing a running server can tell you about itself, so a dirty build says so.
+STAMP="$(cat "$LEDGER_ROOT/VERSION")"
+if [[ -n "$(cd "$LEDGER_ROOT" && git status --porcelain)" ]]; then
+  if [[ "$ALLOW_DIRTY" -eq 1 ]]; then
+    echo "==> WARNING: deploying a dirty tree. Version will be stamped +dirty."
+    (cd "$LEDGER_ROOT" && git status --short)
+    STAMP="$STAMP+dirty"
+  else
+    echo "error: the working tree has uncommitted changes, so the deployed" >&2
+    echo "       version would match no commit. Commit them, or pass" >&2
+    echo "       --allow-dirty to ship anyway." >&2
+    (cd "$LEDGER_ROOT" && git status --short) >&2
+    exit 1
+  fi
+fi
+
+if [[ "$SKIP_TESTS" -eq 1 ]]; then
+  echo "==> WARNING: skipping the test suite"
+else
+  echo "==> Test"
+  (cd "$LEDGER_ROOT" && go test ./...)
+fi
+
+echo "==> Build linux/amd64 ($STAMP)"
 mkdir -p "$LEDGER_ROOT/dist"
 (
   cd "$LEDGER_ROOT"
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%d)" \
+    -ldflags "-X main.version=$STAMP -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%d)" \
     -o dist/ledger-linux-amd64 ./cmd/ledger
 )
 

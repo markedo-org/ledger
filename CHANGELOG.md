@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.2
+
+A deploy runs the tests and refuses a dirty tree.
+
+`scripts/deploy.sh` shipped whatever was on disk without running the suite or
+looking at the working tree, so production could be running code no test had
+seen, stamped with a version that matched no commit. Both happened more than
+once this week. `--allow-dirty` ships anyway and stamps the version `+dirty`,
+so the running server admits it, and `--skip-tests` is there for an outage
+rather than for haste.
+
 ## 0.24.1
 
 `POST .../checks` takes `ns` as well, so the HTTP API can tick several boxes in

@@ -75,3 +75,9 @@ signup: `https://www.task-ledger.com`.
 `scripts/deploy.sh` is how we ship that instance (VPS Services, systemd
 `ledger`, listen `127.0.0.1:8787`). It is not the self-host path. Secrets stay
 in the meta-repo `.secrets/` and on the box, never in this tree.
+
+It runs `go test ./...` first and refuses a working tree with uncommitted
+changes, because the binary is built from what is on disk and would otherwise
+report a version that matches no commit. `--allow-dirty` ships anyway and
+stamps the version `+dirty` so the running server says what it is.
+`--skip-tests` is for an outage.
