@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.24.0
+
+`set_check` takes several boxes at once, and the MCP descriptions say what the
+server actually enforces.
+
+Ticking the last four boxes on a task cost four calls, each one reloading the
+task and re-checking the lease, and an agent that stopped halfway left the task
+in a state nobody had asked for. `set_check` now accepts `ns`, a list of
+indexes, applied in one transaction as one version bump. Every index is
+resolved before anything is written, so a wrong one ticks nothing. `n` still
+works.
+
+`claim_id` is enforced whenever a lease is live, but it sits at the end of the
+tool descriptions as an aside, and an agent writing a call from the schema
+skipped it and got an error it could not have predicted. The condition now
+leads the description on `set_check`, `set_tags`, `set_phase`, and `close_task`.
+
+`ledger config set` reads a value from stdin with `-` or from a file with
+`@path`, so a bearer token no longer has to be typed as an argument, where the
+shell keeps it in history and the process list shows it while it runs.
+
+There is still no MCP tool for ledger settings, and `docs/mcp.md` now says why
+rather than leaving the gap to be read as an oversight. Retention is the one
+setting whose effect is invisible in the reply to the call that set it.
+
 ## 0.23.0
 
 A task now records who closed it and who verified it.

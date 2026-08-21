@@ -76,6 +76,19 @@ Write tokens are refused. Tokens and the ledger row stay.
 `create_token` returns plaintext and id once. Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key`.
 `close_task` requires `evidence`. Moving a task later requires `reason`.
 
+`set_check` takes `ns` as well as `n`, so finishing the last four boxes on a
+task is one call rather than four. Every index is resolved before anything is
+written: if one of them does not exist, none of them are ticked.
+
+There is deliberately no tool for ledger settings. Title and retention are
+changed on the board or with `ledger ledger set-retention`, not by an agent.
+Retention is the one setting whose effect you cannot see in the reply to the
+call that made it: it is a standing instruction to delete finished work on a
+timer, and the deletion lands weeks later, on a board nobody was watching at the
+time. `reset_ledger` is destructive too, but visibly and at once, and it makes
+you name the ledger to confirm. A retention change made by an agent that
+misread a request would look like nothing at all until the history was gone.
+
 `claim_task` and `next_task` return `claim_id` once. Keep it in that chat.
 Pass it on heartbeat, same-actor re-claim, release, close, phase, checks, and
 tags while the lease is live. `set_check` and `set_tags` require it the same

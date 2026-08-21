@@ -113,19 +113,19 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.addNote)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_check",
-		Description: "Tick or untick a sub-checkbox. Identify by n (1-based, from get_task) or by exact body text. All checks must be ticked before close_task. Pass claim_id while a lease is live.",
+		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Ticks or unticks sub-checkboxes. Identify by n (1-based, from get_task), by ns for several at once, or by exact body text. All checks must be ticked before close_task.",
 	}, h.setCheck)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_tags",
-		Description: "Replace the tags on a task. Pass tags as lowercase slugs, at most three. Empty list clears them. A tag is a filter, not a ledger. Pass claim_id while a lease is live.",
+		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Replaces the tags on a task. Tags are lowercase slugs, at most three, and an empty list clears them. A tag is a filter, not a ledger.",
 	}, h.setTags)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_phase",
-		Description: "Move a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. A fourth deferral is refused unless you pass force. Closing is close_task, not this. Pass claim_id while a lease is live.",
+		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Moves a task between NOW, NEXT, LATER, GATED, PARKED. Moving later requires a reason. A fourth deferral is refused unless you pass force. Closing is close_task, not this.",
 	}, h.setPhase)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "close_task",
-		Description: "Close a task. Evidence is required (commit, query result, or observed behaviour). All checks must be ticked. Pass claim_id while a lease is live.",
+		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Closes a task. Evidence is required (commit, query result, or observed behaviour) and all checks must be ticked. Your actor is recorded as the closer.",
 	}, h.closeTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "verify_task",
@@ -596,8 +596,9 @@ type checkIn struct {
 	Ledger  string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
 	Handle  string `json:"handle" jsonschema:"Task handle, for example T-001"`
 	N       int    `json:"n,omitempty" jsonschema:"1-based check index from get_task. Prefer this when body text is not unique."`
-	Body    string `json:"body,omitempty" jsonschema:"Exact check text. Used when n is omitted."`
-	Done    bool   `json:"done" jsonschema:"true to tick, false to untick"`
+	Ns      []int  `json:"ns,omitempty" jsonschema:"Several 1-based check indexes to set in one call, for example [1,2,3]. Use instead of n when you are finishing more than one box."`
+	Body    string `json:"body,omitempty" jsonschema:"Exact check text. Used when n and ns are omitted."`
+	Done    bool   `json:"done" jsonschema:"true to tick, false to untick. Applies to every index given."`
 	ClaimID string `json:"claim_id,omitempty" jsonschema:"Required while a lease is live. Use the claim_id from claim_task or next_task."`
 }
 
@@ -606,7 +607,11 @@ func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn)
 	if err != nil {
 		return nil, nil, err
 	}
-	t, err := h.app.SetCheck(ctx, h.tok, owner, ledger, in.Handle, in.N, in.Body, in.Done, in.ClaimID)
+	ns := in.Ns
+	if len(ns) == 0 && in.N > 0 {
+		ns = []int{in.N}
+	}
+	t, err := h.app.SetChecks(ctx, h.tok, owner, ledger, in.Handle, ns, in.Body, in.Done, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}

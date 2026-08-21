@@ -3,7 +3,9 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/markedo-org/ledger/internal/cliconfig"
 )
@@ -58,6 +60,29 @@ func configShow(args []string) int {
 	return 0
 }
 
+// valueFrom reads a setting from somewhere other than the command line when
+// asked to. A bearer token typed as an argument is kept by the shell's history
+// file and shows up in the process list while it runs, so `ledger config set
+// token -` and `... token @/path/to/file` exist to avoid both.
+func valueFrom(val string) (string, error) {
+	switch {
+	case val == "-":
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("reading the value from stdin: %w", err)
+		}
+		return strings.TrimSpace(string(b)), nil
+	case strings.HasPrefix(val, "@"):
+		b, err := os.ReadFile(strings.TrimPrefix(val, "@"))
+		if err != nil {
+			return "", fmt.Errorf("reading the value from a file: %w", err)
+		}
+		return strings.TrimSpace(string(b)), nil
+	default:
+		return val, nil
+	}
+}
+
 func configSet(args []string) int {
 	fs := flag.NewFlagSet("config set", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -68,9 +93,15 @@ func configSet(args []string) int {
 	rest := fs.Args()
 	if len(rest) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: ledger config set [--profile name] <url|token|owner|ledger> <value>")
+		fmt.Fprintln(os.Stderr, "       value may be - to read stdin, or @path to read a file, which keeps a token out of shell history")
 		return 2
 	}
 	key, val := rest[0], rest[1]
+	val, verr := valueFrom(val)
+	if verr != nil {
+		fmt.Fprintln(os.Stderr, verr)
+		return 1
+	}
 	path, err := cliconfig.Path()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -672,6 +672,14 @@ func (s *Store) AddNote(ctx context.Context, taskID, actor, body string) (types.
 }
 
 func (s *Store) SetCheck(ctx context.Context, taskID, actor, checkID string, done bool) (types.Task, error) {
+	return s.SetChecks(ctx, taskID, actor, []string{checkID}, done)
+}
+
+// SetChecks sets several boxes in one transaction. Ticking six of them used to
+// be six round trips, each one reloading the task and re-checking the lease,
+// and a failure halfway left the task half ticked with no way to tell that was
+// not what the agent meant.
+func (s *Store) SetChecks(ctx context.Context, taskID, actor string, checkIDs []string, done bool) (types.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var task types.Task
@@ -680,37 +688,46 @@ func (s *Store) SetCheck(ctx context.Context, taskID, actor, checkID string, don
 		if err != nil {
 			return err
 		}
-		var found bool
-		var body string
-		var n int
-		for _, c := range t.Checks {
-			if c.ID == checkID {
-				found = true
-				body = c.Body
-				n = c.Rank + 1
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("check not found")
-		}
 		doneInt := 0
 		if done {
 			doneInt = 1
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE checks SET done = ? WHERE id = ?`, doneInt, checkID); err != nil {
-			return err
+		touched := make([]map[string]any, 0, len(checkIDs))
+		for _, checkID := range checkIDs {
+			var found bool
+			var body string
+			var n int
+			for _, c := range t.Checks {
+				if c.ID == checkID {
+					found = true
+					body = c.Body
+					n = c.Rank + 1
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("check not found")
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE checks SET done = ? WHERE id = ?`, doneInt, checkID); err != nil {
+				return err
+			}
+			touched = append(touched, map[string]any{"n": n, "body": body, "done": done})
 		}
 		// Ticking a check changes the task, so it counts as a version: anyone
-		// holding a stale read of this task is holding a stale read.
+		// holding a stale read of this task is holding a stale read. One bump
+		// for the batch, because the batch is one change.
 		if _, err := tx.ExecContext(ctx, `UPDATE tasks SET version = version + 1, updated_at = ? WHERE id = ?`,
 			fmtTime(now()), taskID); err != nil {
 			return err
 		}
-		payload, _ := json.Marshal(map[string]any{"n": n, "body": body, "done": done})
-		if _, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
-			t.LedgerID, t.ID, actor, "check", string(payload), fmtTime(now())); err != nil {
-			return err
+		// One event per box either way, so the log reads the same whether the
+		// agent sent them together or one at a time.
+		for _, p := range touched {
+			payload, _ := json.Marshal(p)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO events(ledger_id, task_id, actor, kind, payload, created_at) VALUES (?,?,?,?,?,?)`,
+				t.LedgerID, t.ID, actor, "check", string(payload), fmtTime(now())); err != nil {
+				return err
+			}
 		}
 		t2, err := getTaskTx(ctx, tx, taskID)
 		task = t2

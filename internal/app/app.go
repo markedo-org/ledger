@@ -416,6 +416,18 @@ func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, hand
 }
 
 func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, handle string, n int, body string, done bool, claimID string) (types.Task, error) {
+	var ns []int
+	if n > 0 {
+		ns = []int{n}
+	}
+	return a.SetChecks(ctx, tok, owner, ledger, handle, ns, body, done, claimID)
+}
+
+// SetChecks ticks or unticks any number of boxes as one change. A task with six
+// checks used to cost six calls to finish, each one paying for the whole
+// load-and-verify-the-lease dance, and an agent that gave up halfway left the
+// task in a state nobody had asked for.
+func (a *App) SetChecks(ctx context.Context, tok types.Token, owner, ledger, handle string, ns []int, body string, done bool, claimID string) (types.Task, error) {
 	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err
@@ -428,12 +440,21 @@ func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, hand
 			return t, err
 		}
 	}
-	var id string
-	if n > 0 {
-		if n > len(t.Checks) {
-			return t, fmt.Errorf("%w: check %d not found", ErrNotFound, n)
+	var ids []string
+	if len(ns) > 0 {
+		// Resolve every index before touching anything, so a typo in the last
+		// one does not leave the first few ticked.
+		seen := map[int]bool{}
+		for _, n := range ns {
+			if n < 1 || n > len(t.Checks) {
+				return t, fmt.Errorf("%w: check %d not found", ErrNotFound, n)
+			}
+			if seen[n] {
+				continue
+			}
+			seen[n] = true
+			ids = append(ids, t.Checks[n-1].ID)
 		}
-		id = t.Checks[n-1].ID
 	} else {
 		body = strings.TrimSpace(body)
 		if body == "" {
@@ -451,9 +472,9 @@ func (a *App) SetCheck(ctx context.Context, tok types.Token, owner, ledger, hand
 		if len(matches) > 1 {
 			return t, fmt.Errorf("%w: check %q is not unique, use n", ErrInvalid, body)
 		}
-		id = matches[0].ID
+		ids = []string{matches[0].ID}
 	}
-	return a.Store.SetCheck(ctx, t.ID, tok.Actor, id, done)
+	return a.Store.SetChecks(ctx, t.ID, tok.Actor, ids, done)
 }
 
 func (a *App) SetTags(ctx context.Context, tok types.Token, owner, ledger, handle string, raw []string, claimID string) (types.Task, error) {

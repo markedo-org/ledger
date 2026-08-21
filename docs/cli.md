@@ -40,6 +40,16 @@ ledger config set [--profile name] url|token|owner|ledger <value>
 `--profile` or `LEDGER_PROFILE` selects a profile. `LEDGER_URL` and
 `LEDGER_TOKEN` override the file (useful in CI). Do not commit the file.
 
+A token typed as an argument is kept by your shell's history file and is
+visible in the process list while the command runs. Two ways to avoid that:
+
+```bash
+ledger config set token @/path/to/token.txt   # read the file
+ledger token mint --actor bot | ledger config set token -   # read stdin
+```
+
+Both trim surrounding whitespace, so a file with a trailing newline is fine.
+
 ## Commands
 
 | Command | What |
