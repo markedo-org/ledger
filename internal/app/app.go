@@ -568,6 +568,35 @@ func (a *App) SetChecks(ctx context.Context, tok types.Token, owner, ledger, han
 	return a.Store.SetChecks(ctx, t.ID, tok.Actor, ids, done)
 }
 
+// SetTitle corrects a title. A title was written once at create and stood for
+// ever, and create_task is the one call an agent makes with nothing to review
+// first, so a mistake in the most visible field on the board could only be
+// repaired by editing SQLite by hand. The old title goes to the event log, so
+// the correction is a change on the record rather than a quiet overwrite.
+func (a *App) SetTitle(ctx context.Context, tok types.Token, owner, ledger, handle, title, claimID string) (types.Task, error) {
+	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
+	if err != nil {
+		return t, err
+	}
+	if leaseLive(t, time.Now().UTC()) {
+		if err := leaseHeldElsewhere(t, claimID); err != nil {
+			return t, err
+		}
+	}
+	title, err = limitText("title", title, MaxTitle)
+	if err != nil {
+		return t, err
+	}
+	if title == "" {
+		return t, fmt.Errorf("%w: title required", ErrInvalid)
+	}
+	if title == t.Title {
+		return t, nil
+	}
+	payload := map[string]string{"from": t.Title, "to": title}
+	return a.Store.Mutate(ctx, t.ID, tok.Actor, "title", payload, store.MutateTask{Title: &title})
+}
+
 func (a *App) SetTags(ctx context.Context, tok types.Token, owner, ledger, handle string, raw []string, claimID string) (types.Task, error) {
 	t, err := a.loadForWrite(ctx, tok, owner, ledger, handle)
 	if err != nil {

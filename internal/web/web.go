@@ -120,6 +120,7 @@ func (s *Server) Engine() *gin.Engine {
 	v1.POST("/:owner/:ledger/tasks/:handle/phase", s.phase)
 	v1.POST("/:owner/:ledger/tasks/:handle/notes", s.note)
 	v1.POST("/:owner/:ledger/tasks/:handle/checks", s.check)
+	v1.POST("/:owner/:ledger/tasks/:handle/title", s.title)
 	v1.POST("/:owner/:ledger/tasks/:handle/tags", s.tags)
 	v1.POST("/:owner/:ledger/tasks/:handle/close", s.close)
 	v1.POST("/:owner/:ledger/tasks/:handle/verify", s.verify)
@@ -599,6 +600,23 @@ func (s *Server) check(c *gin.Context) {
 		ns = []int{in.N}
 	}
 	t, err := s.App.SetChecks(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), ns, in.Body, *in.Done, in.ClaimID)
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, taskJSON(t))
+}
+
+func (s *Server) title(c *gin.Context) {
+	var in struct {
+		Title   string `json:"title"`
+		ClaimID string `json:"claim_id"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		s.fail(c, err)
+		return
+	}
+	t, err := s.App.SetTitle(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.Title, in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return

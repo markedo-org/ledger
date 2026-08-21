@@ -559,6 +559,8 @@ func getTaskTx(ctx context.Context, tx *sql.Tx, id string) (types.Task, error) {
 }
 
 type MutateTask struct {
+	Title           *string
+	Body            *string
 	Phase           *types.Phase
 	Pushed          *int
 	Rank            *int
@@ -588,6 +590,14 @@ func (s *Store) Mutate(ctx context.Context, taskID, actor, kind string, payload 
 		}
 		sets := []string{"version = version + 1", "updated_at = ?"}
 		args := []any{fmtTime(now())}
+		if m.Title != nil {
+			sets = append(sets, "title = ?")
+			args = append(args, *m.Title)
+		}
+		if m.Body != nil {
+			sets = append(sets, "body = ?")
+			args = append(args, *m.Body)
+		}
 		if m.Phase != nil {
 			sets = append(sets, "phase = ?")
 			args = append(args, string(*m.Phase))

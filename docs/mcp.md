@@ -63,7 +63,7 @@ See `.agents/skills/task-ledger/`.
 `create_owner`, `set_max_ledgers`, `list_tasks`, `get_task`, `create_task`,
 `claim_task`, `next_task`, `add_note`, `set_check`, `set_phase`,
 `close_task`, `verify_task`, `heartbeat_task`, `release_task`, `review_url`,
-`set_tags`. `set_phase` accepts optional `force` to override a fourth deferral.
+`set_tags`, `set_title`. `set_phase` accepts optional `force` to override a fourth deferral.
 
 `create_owner` and `set_max_ledgers` need the operator token
 (`LEDGER_OPERATOR_TOKEN`). `create_ledger` and `create_token` accept owner admin
@@ -81,6 +81,13 @@ Text is bounded: a title is 200 characters, a body 20,000, a note or evidence
 returns at most 500 tasks and sets `truncated` when there were more, so an
 agent never plans work off a list that quietly stopped short. The full table is
 in the README.
+
+`set_title` corrects a title. It was written once at create and stood for
+ever, which made `create_task`, the one call an agent makes with nothing to
+review first, unforgiving about the most visible field on the board. The title
+it replaced goes to the event log. There is still no delete: a task created by
+mistake is closed with evidence saying so, because a handle that once existed
+and then vanished is worse to read than a closed row that explains itself.
 
 `set_check` takes `ns` as well as `n`, so finishing the last four boxes on a
 task is one call rather than four. Every index is resolved before anything is

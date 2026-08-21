@@ -97,7 +97,7 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 	}, h.getTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_task",
-		Description: "Create a task. Allocates the next handle in the series (default T). Always send idempotency_key. Optional tags: at most three lowercase slugs. Does not claim the task.",
+		Description: "Create a task. Allocates the next handle in the series (default T). Always send idempotency_key. Optional tags: at most three lowercase slugs. Does not claim the task. A create cannot be undone: there is no delete, so a task made by mistake is closed with evidence saying so. The title can be corrected with set_title.",
 	}, h.createTask)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "claim_task",
@@ -115,6 +115,10 @@ func newServer(a *app.App, tok types.Token) *mcp.Server {
 		Name:        "set_check",
 		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Ticks or unticks sub-checkboxes. Identify by n (1-based, from get_task), by ns for several at once, or by exact body text. All checks must be ticked before close_task.",
 	}, h.setCheck)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "set_title",
+		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Corrects a task's title. The old title is kept in the event log. Use it to fix a title written by mistake, not to repurpose a task into a different piece of work: create a new one for that, since a create cannot be undone.",
+	}, h.setTitle)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "set_tags",
 		Description: "Pass claim_id whenever the task is claimed; the call is refused without it. Replaces the tags on a task. Tags are lowercase slugs, at most three, and an empty list clears them. A tag is a filter, not a ledger.",
@@ -615,6 +619,26 @@ func (h *host) setCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkIn)
 		ns = []int{in.N}
 	}
 	t, err := h.app.SetChecks(ctx, h.tok, owner, ledger, in.Handle, ns, in.Body, in.Done, in.ClaimID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, taskMap(t), nil
+}
+
+type titleIn struct {
+	Owner   string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
+	Ledger  string `json:"ledger,omitempty" jsonschema:"Ledger slug. Defaults to the token's ledger, or the owner's only ledger."`
+	Handle  string `json:"handle" jsonschema:"Task handle, for example T-001"`
+	Title   string `json:"title" jsonschema:"The corrected title. One line, no handle and no imported ID in it."`
+	ClaimID string `json:"claim_id,omitempty" jsonschema:"Required while a lease is live. Use the claim_id from claim_task or next_task."`
+}
+
+func (h *host) setTitle(ctx context.Context, _ *mcp.CallToolRequest, in titleIn) (*mcp.CallToolResult, map[string]any, error) {
+	owner, ledger, err := h.scope(ctx, in.Owner, in.Ledger)
+	if err != nil {
+		return nil, nil, err
+	}
+	t, err := h.app.SetTitle(ctx, h.tok, owner, ledger, in.Handle, in.Title, in.ClaimID)
 	if err != nil {
 		return nil, nil, err
 	}

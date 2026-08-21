@@ -106,6 +106,7 @@ on the body. Create requires `idempotency_key` (JSON or header
 | POST | `/v1/:owner/:ledger/tasks/:handle/phase` | Move phase |
 | POST | `/v1/:owner/:ledger/tasks/:handle/notes` | Append note |
 | POST | `/v1/:owner/:ledger/tasks/:handle/checks` | Tick or untick a check, or several with `ns` |
+| POST | `/v1/:owner/:ledger/tasks/:handle/title` | Correct the title (old one kept in the log) |
 | POST | `/v1/:owner/:ledger/tasks/:handle/tags` | Replace tags |
 | POST | `/v1/:owner/:ledger/tasks/:handle/close` | Close (`evidence` required) |
 | POST | `/v1/:owner/:ledger/tasks/:handle/verify` | Refresh verified date, recording your actor as the verifier |

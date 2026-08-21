@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.26.0
+
+A task title can be corrected.
+
+A title was written once at create and stood for ever: the only title mutation
+in the server was on a *ledger's* title, so a task's could be repaired only by
+editing SQLite by hand on the host. That is a sharp edge on the one call an
+agent makes with nothing to review first, and it bit us. An agent working off a
+stale local TASKS.md put each item's old ID into the new title, and every row
+on that board showed two unrelated IDs with no way back.
+
+`set_title` on MCP and `POST .../tasks/:handle/title` correct one. The title it
+replaced goes to the event log, so the correction is a change on the record
+rather than a quiet overwrite. It is a write like any other, so a live lease
+governs it and the length limit applies.
+
+Creating a task stays irreversible, and `create_task` now says so. There is no
+delete: a task made by mistake is closed with evidence saying so. A handle that
+existed and then vanished reads worse than a closed row that explains itself,
+and the point of the ledger is that the record holds.
+
 ## 0.25.0
 
 Bounds on what one write token can send, and errors that do not describe the
