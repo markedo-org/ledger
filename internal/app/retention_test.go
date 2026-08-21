@@ -73,14 +73,14 @@ func TestListHidesOldDone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, board, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
+	_, board, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(board) != 0 {
 		t.Fatalf("default list should hide 8-day DONE, got %d", len(board))
 	}
-	_, archived, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
+	_, archived, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestRecentDoneStaysOnBoard(t *testing.T) {
 	if _, err := a.Close(ctx, tok, "markedo", "meta", "T-001", "just now", ""); err != nil {
 		t.Fatal(err)
 	}
-	_, board, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
+	_, board, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
 	if err != nil || len(board) != 1 {
 		t.Fatalf("recent DONE should stay on the board: %d %v", len(board), err)
 	}
@@ -124,7 +124,7 @@ func TestArchiveZeroKeepsDone(t *testing.T) {
 	}
 	l, _ := a.Ledger(ctx, tok, "markedo", "meta")
 	_ = a.Store.SetClosedAt(ctx, l.ID, "T-001", time.Now().UTC().AddDate(0, 0, -40))
-	_, board, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
+	_, board, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
 	if err != nil || len(board) != 1 {
 		t.Fatalf("archive 0 should keep DONE: %d %v", len(board), err)
 	}
@@ -154,7 +154,7 @@ func TestPurgeDeletesOldDone(t *testing.T) {
 	if _, err := a.Get(ctx, tok, "markedo", "meta", "T-001"); err == nil {
 		t.Fatal("purged task still gettable")
 	}
-	_, archived, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
+	_, archived, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
 	if err != nil || len(archived) != 0 {
 		t.Fatalf("archive after purge: %d %v", len(archived), err)
 	}
@@ -252,11 +252,11 @@ func TestResetLedgerRestartsSeries(t *testing.T) {
 	if err != nil || n != 2 || l.Slug != "meta" {
 		t.Fatalf("reset %#v n=%d %v", l, n, err)
 	}
-	_, board, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
+	_, board, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{})
 	if err != nil || len(board) != 0 {
 		t.Fatalf("board after reset: %d %v", len(board), err)
 	}
-	_, archived, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
+	_, archived, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{DoneOnly: true})
 	if err != nil || len(archived) != 0 {
 		t.Fatalf("archive after reset: %d %v", len(archived), err)
 	}

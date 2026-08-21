@@ -436,6 +436,9 @@ type listOut struct {
 	Owner  string      `json:"owner"`
 	Ledger string      `json:"ledger"`
 	Tasks  []taskBrief `json:"tasks"`
+	// Set when the board is longer than one response carries, so nobody plans
+	// work off a list that quietly stopped short.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 type taskBrief struct {
@@ -461,11 +464,11 @@ func (h *host) listTasks(ctx context.Context, _ *mcp.CallToolRequest, in listIn)
 	if err != nil {
 		return nil, listOut{}, err
 	}
-	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{DoneOnly: in.Done, Tag: strings.ToLower(strings.TrimSpace(in.Tag))})
+	l, tasks, truncated, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{DoneOnly: in.Done, Tag: strings.ToLower(strings.TrimSpace(in.Tag))})
 	if err != nil {
 		return nil, listOut{}, err
 	}
-	out := listOut{Owner: l.OwnerSlug, Ledger: l.Slug, Tasks: []taskBrief{}}
+	out := listOut{Owner: l.OwnerSlug, Ledger: l.Slug, Tasks: []taskBrief{}, Truncated: truncated}
 	for _, t := range tasks {
 		out.Tasks = append(out.Tasks, brief(t))
 	}
@@ -747,7 +750,7 @@ func (h *host) readLive(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp
 	if err != nil {
 		return nil, err
 	}
-	l, tasks, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{})
+	l, tasks, _, err := h.app.List(ctx, h.tok, owner, ledger, app.ListQuery{})
 	if err != nil {
 		return nil, err
 	}

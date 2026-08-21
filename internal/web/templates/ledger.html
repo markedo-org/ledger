@@ -21,6 +21,9 @@
 {{if .Frozen}}
 <p class="notice freeze">This ledger is read-only. It is newer than this owner's max_ledgers. Writes resume when the cap rises.</p>
 {{end}}
+{{if .Truncated}}
+<p class="notice">Showing the first {{.MaxRows}} tasks. There are more. Close what is done, or filter by tag.</p>
+{{end}}
 {{if .TagLinks}}
 <nav class="tag-nav" aria-label="Tags">
   <a href="{{.AllHref}}"{{if not .Tag}} class="on"{{end}}>all</a>

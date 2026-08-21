@@ -22,6 +22,39 @@ const (
 	SessionTTL         = 7 * 24 * time.Hour
 )
 
+// How much text one write token may put in a ledger. Nothing here bounded
+// anything before, so a single authenticated token could send a hundred
+// megabyte title, land it in SQLite, and leave the board rendering it. The
+// numbers are set where a person writing a real task will never meet them: a
+// title is a line, a body is a page or several, evidence is a paste of what you
+// saw. They are counted in runes, so a limit means the same in any language.
+const (
+	MaxTitle          = 200
+	MaxBody           = 20000
+	MaxNoteBody       = 10000
+	MaxEvidence       = 10000
+	MaxReason         = 2000
+	MaxRef            = 500
+	MaxCheckBody      = 500
+	MaxChecksPerTask  = 50
+	MaxIdempotencyKey = 200
+	MaxEmailAddress   = 254 // the longest an address may be, per RFC 5321
+)
+
+// An actor name and a slug are already bounded by the patterns they have to
+// match (internal/types/id.go), so they are not repeated here.
+
+// limitText trims a field and refuses it when it is longer than the product
+// has any use for. The message names the field and the limit, because an agent
+// that hits one has to be able to fix it without guessing.
+func limitText(field, s string, max int) (string, error) {
+	s = strings.TrimSpace(s)
+	if len([]rune(s)) > max {
+		return "", fmt.Errorf("%w: %s must be %d characters or fewer", ErrInvalid, field, max)
+	}
+	return s, nil
+}
+
 var (
 	ErrUnauthorized = errors.New("unauthorized")
 	ErrForbidden    = errors.New("forbidden")
@@ -121,13 +154,38 @@ func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string,
 	if err := a.requireWritable(ctx, l); err != nil {
 		return types.Task{}, false, err
 	}
-	title := strings.TrimSpace(in.Title)
+	title, err := limitText("title", in.Title, MaxTitle)
+	if err != nil {
+		return types.Task{}, false, err
+	}
 	if title == "" {
 		return types.Task{}, false, fmt.Errorf("%w: title required", ErrInvalid)
 	}
-	key := strings.TrimSpace(in.IdempotencyKey)
+	body, err := limitText("body", in.Body, MaxBody)
+	if err != nil {
+		return types.Task{}, false, err
+	}
+	ref, err := limitText("ref", in.Ref, MaxRef)
+	if err != nil {
+		return types.Task{}, false, err
+	}
+	key, err := limitText("idempotency_key", in.IdempotencyKey, MaxIdempotencyKey)
+	if err != nil {
+		return types.Task{}, false, err
+	}
 	if key == "" {
 		return types.Task{}, false, fmt.Errorf("%w: idempotency_key required", ErrInvalid)
+	}
+	if len(in.Checks) > MaxChecksPerTask {
+		return types.Task{}, false, fmt.Errorf("%w: a task may have %d checks or fewer", ErrInvalid, MaxChecksPerTask)
+	}
+	checks := make([]string, 0, len(in.Checks))
+	for _, c := range in.Checks {
+		c, err := limitText("check", c, MaxCheckBody)
+		if err != nil {
+			return types.Task{}, false, err
+		}
+		checks = append(checks, c)
 	}
 	prefix := strings.ToUpper(strings.TrimSpace(in.Prefix))
 	if prefix == "" {
@@ -156,13 +214,13 @@ func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string,
 		LedgerID:       l.ID,
 		Prefix:         prefix,
 		Title:          title,
-		Body:           strings.TrimSpace(in.Body),
+		Body:           body,
 		Phase:          phase,
 		Size:           size,
-		Ref:            strings.TrimSpace(in.Ref),
+		Ref:            ref,
 		Actor:          tok.Actor,
 		IdempotencyKey: key,
-		Checks:         in.Checks,
+		Checks:         checks,
 		Tags:           tags,
 	})
 	return task, replay, err
@@ -180,13 +238,36 @@ func (a *App) Get(ctx context.Context, tok types.Token, owner, ledger, handle st
 	return t, err
 }
 
-func (a *App) List(ctx context.Context, tok types.Token, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, error) {
+// MaxListRows is the most tasks one list response carries. A board is meant to
+// be small enough for a person to read, and retention archives what is done,
+// so a ledger that reaches this has a problem the ceiling is not the answer to.
+// The point of the ceiling is that the answer stays a fixed size, and the point
+// of reporting it is that nobody plans work off a board that quietly stopped
+// short.
+const MaxListRows = 500
+
+func (a *App) List(ctx context.Context, tok types.Token, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, bool, error) {
 	l, err := a.Ledger(ctx, tok, owner, ledger)
 	if err != nil {
-		return l, nil, err
+		return l, nil, false, err
 	}
-	tasks, err := a.Store.ListTasks(ctx, l.ID, a.taskList(l, q))
-	return l, tasks, err
+	tasks, truncated, err := a.listCapped(ctx, l, q)
+	return l, tasks, truncated, err
+}
+
+// listCapped asks for one row more than it will return, which is how it knows
+// there was more without counting the whole table.
+func (a *App) listCapped(ctx context.Context, l types.Ledger, q ListQuery) ([]types.Task, bool, error) {
+	sel := a.taskList(l, q)
+	sel.Limit = MaxListRows + 1
+	tasks, err := a.Store.ListTasks(ctx, l.ID, sel)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(tasks) > MaxListRows {
+		return tasks[:MaxListRows], true, nil
+	}
+	return tasks, false, nil
 }
 
 func (a *App) PublicLedger(ctx context.Context, owner, ledger string) (types.Ledger, error) {
@@ -198,16 +279,16 @@ func (a *App) PublicLedger(ctx context.Context, owner, ledger string) (types.Led
 }
 
 // ListPublic is the HTML/markdown read path. Bind to localhost in v1.
-func (a *App) ListPublic(ctx context.Context, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, error) {
+func (a *App) ListPublic(ctx context.Context, owner, ledger string, q ListQuery) (types.Ledger, []types.Task, bool, error) {
 	l, err := a.Store.ResolveLedger(ctx, owner, ledger)
 	if err == sql.ErrNoRows {
-		return l, nil, ErrNotFound
+		return l, nil, false, ErrNotFound
 	}
 	if err != nil {
-		return l, nil, err
+		return l, nil, false, err
 	}
-	tasks, err := a.Store.ListTasks(ctx, l.ID, a.taskList(l, q))
-	return l, tasks, err
+	tasks, truncated, err := a.listCapped(ctx, l, q)
+	return l, tasks, truncated, err
 }
 
 func (a *App) GetPublic(ctx context.Context, owner, ledger, handle string) (types.Ledger, types.Task, error) {
@@ -268,7 +349,12 @@ func (a *App) Claim(ctx context.Context, tok types.Token, owner, ledger, handle 
 	// the claim_id but still owns the work; without this the task is locked
 	// until the lease runs out and nobody can even release it.
 	steal := in.Steal && live
-	if steal && strings.TrimSpace(in.Reason) == "" {
+	reason, err := limitText("reason", in.Reason, MaxReason)
+	if err != nil {
+		return t, err
+	}
+	in.Reason = reason
+	if steal && in.Reason == "" {
 		return t, fmt.Errorf("%w: steal requires a reason", ErrInvalid)
 	}
 	if live && !steal {
@@ -398,9 +484,14 @@ func (a *App) SetPhase(ctx context.Context, tok types.Token, owner, ledger, hand
 			return t, err
 		}
 	}
+	reason, err := limitText("reason", in.Reason, MaxReason)
+	if err != nil {
+		return t, err
+	}
+	in.Reason = reason
 	pushed := t.Pushed
 	if phase.Rank() > t.Phase.Rank() && phase != types.PhaseDONE {
-		if strings.TrimSpace(in.Reason) == "" {
+		if in.Reason == "" {
 			return t, fmt.Errorf("%w: deferral requires a reason", ErrInvalid)
 		}
 		pushed++
@@ -510,7 +601,10 @@ func (a *App) AddNote(ctx context.Context, tok types.Token, owner, ledger, handl
 	if err != nil {
 		return types.Note{}, err
 	}
-	body = strings.TrimSpace(body)
+	body, err = limitText("note body", body, MaxNoteBody)
+	if err != nil {
+		return types.Note{}, err
+	}
 	if body == "" {
 		return types.Note{}, fmt.Errorf("%w: note body required", ErrInvalid)
 	}
@@ -527,7 +621,10 @@ func (a *App) Close(ctx context.Context, tok types.Token, owner, ledger, handle,
 			return t, err
 		}
 	}
-	evidence = strings.TrimSpace(evidence)
+	evidence, err = limitText("evidence", evidence, MaxEvidence)
+	if err != nil {
+		return t, err
+	}
 	if evidence == "" {
 		return t, fmt.Errorf("%w: closing requires evidence", ErrInvalid)
 	}
@@ -567,7 +664,7 @@ func (a *App) Verify(ctx context.Context, tok types.Token, owner, ledger, handle
 }
 
 func (a *App) Next(ctx context.Context, tok types.Token, owner, ledger, prefix string, ttl time.Duration) (types.Task, error) {
-	_, tasks, err := a.List(ctx, tok, owner, ledger, ListQuery{})
+	_, tasks, _, err := a.List(ctx, tok, owner, ledger, ListQuery{})
 	if err != nil {
 		return types.Task{}, err
 	}

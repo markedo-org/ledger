@@ -160,7 +160,7 @@ func TestTagsCreateListReplace(t *testing.T) {
 	}); err == nil {
 		t.Fatal("want max 3")
 	}
-	_, listed, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{Tag: "ledger"})
+	_, listed, _, err := a.List(ctx, tok, "markedo", "meta", app.ListQuery{Tag: "ledger"})
 	if err != nil || len(listed) != 1 || listed[0].Handle != task.Handle {
 		t.Fatalf("filter %v %+v", err, listed)
 	}

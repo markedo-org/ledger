@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -74,7 +76,7 @@ func (s *Server) Engine() *gin.Engine {
 		log.Printf("trusted proxies: %v, falling back to the peer address", err)
 		_ = r.SetTrustedProxies(nil)
 	}
-	r.Use(gin.Recovery(), securityHeaders(s.csp))
+	r.Use(gin.Recovery(), securityHeaders(s.csp), limitRequestBody)
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -156,23 +158,58 @@ func tokenFrom(c *gin.Context) types.Token {
 	return t
 }
 
+// MaxRequestBody is the most any single request may carry. The largest honest
+// one is a task with a full body and its checks, which is a few tens of
+// kilobytes. Nginx in front of the hosted instance caps at 2m; this is the
+// binary's own answer for anyone running it without a proxy.
+const MaxRequestBody = 1 << 20 // 1 MiB
+
+func limitRequestBody(c *gin.Context) {
+	if c.Request.Body != nil {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxRequestBody)
+	}
+	c.Next()
+}
+
+// fail turns an error into a status and a message the caller may see. Anything
+// we did not classify is ours, not theirs: it carries whatever SQLite or the
+// filesystem said, including table names and paths, so the client gets a
+// reference and the detail goes to the log where it is useful and private.
 func (s *Server) fail(c *gin.Context, err error) {
-	code := http.StatusInternalServerError
+	var maxBytes *http.MaxBytesError
 	switch {
 	case errors.Is(err, app.ErrUnauthorized):
-		code = http.StatusUnauthorized
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 	case errors.Is(err, app.ErrForbidden):
-		code = http.StatusForbidden
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 	case errors.Is(err, app.ErrNotFound):
-		code = http.StatusNotFound
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, app.ErrConflict):
-		code = http.StatusConflict
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, app.ErrInvalid):
-		code = http.StatusBadRequest
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, app.ErrPolicy):
-		code = http.StatusUnprocessableEntity
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+	case errors.As(err, &maxBytes):
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"error": fmt.Sprintf("request body must be %d bytes or fewer", MaxRequestBody),
+		})
+	default:
+		ref := errorRef()
+		log.Printf("error ref=%s %s %s: %v", ref, c.Request.Method, c.Request.URL.Path, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "ref": ref})
 	}
-	c.JSON(code, gin.H{"error": err.Error()})
+}
+
+// errorRef gives one failure a short name, so a customer reporting "internal
+// error, ref e3f19a" can be answered from the log without them having to see
+// what it says.
+func errorRef() string {
+	b := make([]byte, 3)
+	if _, err := rand.Read(b); err != nil {
+		return "unlogged"
+	}
+	return hex.EncodeToString(b)
 }
 
 func taskJSON(t types.Task) gin.H {
@@ -426,7 +463,7 @@ func boardQuery(archive bool, tag string) string {
 }
 
 func (s *Server) list(c *gin.Context) {
-	_, tasks, err := s.App.List(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), app.ListQuery{DoneOnly: wantDone(c), Tag: wantTag(c)})
+	_, tasks, truncated, err := s.App.List(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), app.ListQuery{DoneOnly: wantDone(c), Tag: wantTag(c)})
 	if err != nil {
 		s.fail(c, err)
 		return
@@ -435,7 +472,11 @@ func (s *Server) list(c *gin.Context) {
 	for _, t := range tasks {
 		out = append(out, taskJSON(t))
 	}
-	c.JSON(http.StatusOK, gin.H{"tasks": out})
+	body := gin.H{"tasks": out}
+	if truncated {
+		body["truncated"] = true
+	}
+	c.JSON(http.StatusOK, body)
 }
 
 func (s *Server) get(c *gin.Context) {
@@ -705,7 +746,7 @@ func (s *Server) htmlLedger(c *gin.Context) {
 	}
 	archive := wantDone(c)
 	tag := wantTag(c)
-	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{DoneOnly: archive, Tag: tag})
+	l, tasks, truncated, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{DoneOnly: archive, Tag: tag})
 	if err != nil {
 		s.htmlErr(c, err)
 		return
@@ -769,6 +810,8 @@ func (s *Server) htmlLedger(c *gin.Context) {
 		"DoneHref":  "/" + l.OwnerSlug + "/" + l.Slug + boardQuery(true, tag),
 		"TagLinks":  tagLinks,
 		"Phases":    phases,
+		"Truncated": truncated,
+		"MaxRows":   app.MaxListRows,
 		"CanManage": canManageLedger(sess, signedIn, l.OwnerSlug, l.Slug),
 	})
 	c.Status(http.StatusOK)
@@ -861,7 +904,7 @@ func countLabel(n int, one, many string) string {
 }
 
 func (s *Server) markdown(c *gin.Context, owner, ledger string) {
-	l, tasks, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{})
+	l, tasks, _, err := s.App.ListPublic(c.Request.Context(), owner, ledger, app.ListQuery{})
 	if err != nil {
 		s.htmlErr(c, err)
 		return

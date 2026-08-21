@@ -50,7 +50,7 @@ func TestOperatorCannotReachTenantWork(t *testing.T) {
 	}
 
 	t.Run("cannot read the board", func(t *testing.T) {
-		if _, _, err := a.List(ctx, op, "acme", "inbox", app.ListQuery{}); !errors.Is(err, app.ErrForbidden) {
+		if _, _, _, err := a.List(ctx, op, "acme", "inbox", app.ListQuery{}); !errors.Is(err, app.ErrForbidden) {
 			t.Fatalf("operator listed a tenant's tasks, got %v", err)
 		}
 	})

@@ -76,6 +76,12 @@ Write tokens are refused. Tokens and the ledger row stay.
 `create_token` returns plaintext and id once. Prefer `next_task` over list-then-claim. `create_task` requires `idempotency_key`.
 `close_task` requires `evidence`. Moving a task later requires `reason`.
 
+Text is bounded: a title is 200 characters, a body 20,000, a note or evidence
+10,000, a reason 2,000, and a task may carry 50 checks of 500 each. `list_tasks`
+returns at most 500 tasks and sets `truncated` when there were more, so an
+agent never plans work off a list that quietly stopped short. The full table is
+in the README.
+
 `set_check` takes `ns` as well as `n`, so finishing the last four boxes on a
 task is one call rather than four. Every index is resolved before anything is
 written: if one of them does not exist, none of them are ticked.

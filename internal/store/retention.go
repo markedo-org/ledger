@@ -15,6 +15,7 @@ type TaskList struct {
 	DoneOnly      bool
 	Tag           string
 	ArchiveBefore *time.Time // hide DONE closed before this; nil keeps all DONE
+	Limit         int        // at most this many rows; 0 is no limit
 }
 
 func scanLedger(sc interface{ Scan(dest ...any) error }) (types.Ledger, error) {

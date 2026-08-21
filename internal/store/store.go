@@ -428,6 +428,10 @@ func (s *Store) ListTasks(ctx context.Context, ledgerID string, q TaskList) ([]t
 	query += ` ORDER BY
 		CASE phase WHEN 'NOW' THEN 0 WHEN 'NEXT' THEN 1 WHEN 'LATER' THEN 2 WHEN 'GATED' THEN 3 WHEN 'PARKED' THEN 4 WHEN 'DONE' THEN 5 ELSE 9 END,
 		rank ASC, n ASC`
+	if q.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, q.Limit)
+	}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

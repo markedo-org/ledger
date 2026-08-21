@@ -23,6 +23,9 @@ func NormalizeEmail(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
+	if len(raw) > MaxEmailAddress {
+		return "", fmt.Errorf("%w: invalid email", ErrInvalid)
+	}
 	addr, err := mail.ParseAddress(raw)
 	if err != nil || addr.Address == "" || !strings.Contains(addr.Address, "@") {
 		return "", fmt.Errorf("%w: invalid email", ErrInvalid)

@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.25.0
+
+Bounds on what one write token can send, and errors that do not describe the
+inside of the server.
+
+Nothing limited the length of a title, body, note, evidence, reason, ref or
+check, and no route capped the request body, so a single authenticated token
+could put a hundred megabyte title into SQLite and leave the board rendering
+it. Text limits now live in the app layer, so the API, MCP and the CLI all get
+the same answer, and every request body is capped at 1 MiB. The numbers are set
+where real work never meets them: a title is 200 characters, a body 20,000, a
+note or evidence 10,000, a reason 2,000, and a task may carry 50 checks. The
+full table is in the README.
+
+Errors went back to the client verbatim, so whatever SQLite said, including
+table names and the path to the database, went out over the wire. The errors we
+wrote ourselves still do, because those are the useful ones. Anything else is
+now `internal error` with a short `ref`, and the detail goes to the log, where
+it can be looked up without a stranger reading it.
+
+List responses had no ceiling, so a large ledger returned everything in one
+answer. They stop at 500 tasks and report `truncated`, on the API, on MCP, and
+on the board. A ledger that reaches this has a problem the ceiling is not the
+answer to, which is why it says so instead of paging quietly.
+
+`App.List` and `App.ListPublic` return a truncation flag, which is a breaking
+change for anyone importing the package.
+
 ## 0.24.2
 
 A deploy runs the tests and refuses a dirty tree.

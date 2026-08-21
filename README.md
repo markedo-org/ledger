@@ -114,6 +114,29 @@ on the body. Create requires `idempotency_key` (JSON or header
 Handles are `T-001` (one-letter series, default `T`). Default lease is 30
 minutes.
 
+### Limits
+
+One authenticated write token should not be able to fill the disk, so text is
+bounded. Every surface inherits the same numbers, because they are enforced in
+the app layer rather than at the edge.
+
+| Field | Limit |
+| --- | --- |
+| Title | 200 characters |
+| Body | 20,000 |
+| Note | 10,000 |
+| Evidence | 10,000 |
+| Reason | 2,000 |
+| Ref | 500 |
+| Check text | 500, and 50 checks per task |
+| Idempotency key | 200 |
+| Request body | 1 MiB |
+| Tasks per list response | 500, and the response says `truncated` when it hit that |
+
+An error the server did not classify comes back as `internal error` with a
+short `ref`; the detail is in the log, where it does not tell a stranger which
+tables exist or where the database lives.
+
 ## Layout
 
 | Path | What |
