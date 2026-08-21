@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.24.1
+
+`POST .../checks` takes `ns` as well, so the HTTP API can tick several boxes in
+one call the same way MCP can. 0.24.0 gave the batch to MCP alone, which would
+have made the API the poorer of two surfaces that are meant to be the same
+product. `n` is unchanged.
+
 ## 0.24.0
 
 `set_check` takes several boxes at once, and the MCP descriptions say what the

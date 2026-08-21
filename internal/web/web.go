@@ -540,6 +540,7 @@ func (s *Server) note(c *gin.Context) {
 func (s *Server) check(c *gin.Context) {
 	var in struct {
 		N       int    `json:"n"`
+		Ns      []int  `json:"ns"`
 		Body    string `json:"body"`
 		Done    *bool  `json:"done"`
 		ClaimID string `json:"claim_id"`
@@ -552,7 +553,11 @@ func (s *Server) check(c *gin.Context) {
 		s.fail(c, fmt.Errorf("%w: done required", app.ErrInvalid))
 		return
 	}
-	t, err := s.App.SetCheck(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), in.N, in.Body, *in.Done, in.ClaimID)
+	ns := in.Ns
+	if len(ns) == 0 && in.N > 0 {
+		ns = []int{in.N}
+	}
+	t, err := s.App.SetChecks(c.Request.Context(), tokenFrom(c), c.Param("owner"), c.Param("ledger"), c.Param("handle"), ns, in.Body, *in.Done, in.ClaimID)
 	if err != nil {
 		s.fail(c, err)
 		return
