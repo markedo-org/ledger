@@ -7,6 +7,19 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: deps
+    groups:
+      # One pull request a week for the safe levels. Ungrouped, every module
+      # lands its own PR touching go.mod and go.sum, so the first to merge
+      # forces a rebase of the rest.
+      go-modules:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      # Majors stay out of that group deliberately. A Go major is an API break
+      # worth reading on its own, not something to skim inside a batch.
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -14,3 +27,11 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: ci
+    groups:
+      # Every level here, majors included. Action majors are usually runner or
+      # Node runtime bumps rather than behaviour changes, and the steps sit on
+      # adjacent lines in ci.yml and release.yml, so separate PRs conflict with
+      # each other for no benefit.
+      actions:
+        patterns:
+          - "*"

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.26.1
+
+Dependencies, and one pull request a week instead of six.
+
+Nothing in the server changed. `modernc.org/sqlite` moves 1.34.5 to 1.57.0,
+carrying `modernc.org/libc` 1.55.3 to 1.74.4 underneath it, gin goes 1.11.0 to
+1.12.0, and the MCP `go-sdk` 1.2.0 to 1.7.0. The workflow actions move with
+them: checkout to v7, setup-go to v7, the release action to v3, all Node 24
+runtime bumps that `ubuntu-latest` is long past.
+
+The store and the MCP endpoint are where a dependency this far down could break
+quietly, and `scripts/smoke.sh` exercises both against a real database. It ran
+against the whole set before any of it landed rather than after, because a
+driver that fails on the box is not a thing to find out from the ledger going
+quiet.
+
+Dependabot now groups its work. Six pull requests arrived for one week of
+updates and no single one could merge without rebasing the rest: the module
+bumps all touch `go.mod`, and the action steps sit on adjacent lines in both
+workflows. Go minor and patch updates now come as one pull request and actions
+as another. A Go major still arrives on its own, because an API break is worth
+reading by itself rather than skimming inside a batch.
+
 ## 0.26.0
 
 A task title can be corrected.
