@@ -632,3 +632,48 @@ func TestMCPResetLedger(t *testing.T) {
 		t.Fatalf("expected T-001: %s", raw)
 	}
 }
+
+// A reverse proxy passes the public Host to a server listening on loopback.
+// The SDK reads that shape as a DNS rebinding attempt and answers 403 unless
+// the protection is off, which took the hosted /mcp down once already. The
+// client tests cannot catch it: they dial the test server by its own loopback
+// address, so the Host is loopback too and the check never fires.
+func TestMCPAcceptsProxiedHost(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	tok, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+		t.Fatal(err)
+	}
+	httpSrv := httptest.NewServer(mcpserver.Handler(app.New(s)))
+	t.Cleanup(httpSrv.Close)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"` +
+		mcpserver.ProtocolRevision + `","capabilities":{},"clientInfo":{"name":"proxy","version":"1"}}}`
+	req, err := http.NewRequest(http.MethodPost, httpSrv.URL, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	// What nginx sends, and what the SDK objects to.
+	req.Host = "task-ledger.com"
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("proxied Host rejected with 403: hosted /mcp would be down")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", resp.StatusCode)
+	}
+}

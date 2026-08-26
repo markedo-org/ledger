@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.26.2
+
+MCP works behind the reverse proxy again.
+
+0.26.1 took the hosted `/mcp` down. The MCP SDK enables DNS rebinding
+protection when it sees a loopback listener, on the reasoning that a local
+server could be reached by a browser a malicious page has redirected, and it
+refuses any request whose `Host` is not itself loopback. Production listens on
+`127.0.0.1:8787` with nginx in front passing `Host: task-ledger.com`, which is
+exactly the shape it rejects. Every agent call got `403 Forbidden: invalid Host
+header`. The HTTP API and the HTML view were unaffected, so the ledger looked
+up while nothing could reach it over MCP.
+
+`DisableLocalhostProtection` is now set. The check is redundant here: `/mcp`
+authenticates a bearer token before the SDK handler runs, and a token is not a
+cookie, so a rebinding attack has no way to present one.
+
+The smoke test could not have caught this. `smokemcp` dials the server by its
+own loopback address, so the `Host` is loopback and the check never fires. Only
+a real hostname in front of a loopback listener trips it, which is the one shape
+no local test had. There is now a test that sends a proxied `Host` straight at
+the handler and fails on 403, verified to fail without the fix.
+
 ## 0.26.1
 
 Dependencies, and one pull request a week instead of six.

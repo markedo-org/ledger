@@ -17,10 +17,21 @@ const ProtocolRevision = "2025-06-18"
 type ctxKey struct{}
 
 func Handler(a *app.App) http.Handler {
+	// DisableLocalhostProtection: the SDK's DNS rebinding protection reads a
+	// loopback listener as a local server a browser could be tricked into
+	// reaching, and rejects any Host that is not itself loopback. In production
+	// we listen on 127.0.0.1 behind nginx, which passes the public Host, so
+	// that check refuses every real request with 403. The bearer token below is
+	// the gate that matters here, and it is checked before this handler runs:
+	// it is not a cookie, so a rebinding attack has no way to supply it.
 	inner := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		tok, _ := r.Context().Value(ctxKey{}).(types.Token)
 		return newServer(a, tok)
-	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	}, &mcp.StreamableHTTPOptions{
+		Stateless:                  true,
+		JSONResponse:               true,
+		DisableLocalhostProtection: true,
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, err := a.Auth(r.Context(), bearer(r))
 		if err != nil {
