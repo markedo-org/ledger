@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.26.3
+
+Dependencies. The server is unchanged.
+
+`modernc.org/sqlite` moves 1.57.0 to 1.58.0, which is SQLite 3.53.4 and
+drops their local journal-rollback patch because upstream shipped the fix.
+`modernc.org/libc` moves 1.74.4 to 1.75.6 with it. Linux OFD locks exist in
+this driver and stay off unless `MODERNC_SQLITE_OFD_LOCK` is set.
+
+The MCP `go-sdk` moves 1.7.0 to 1.8.0. `DisableLocalhostProtection` is still
+the Go option we set; the release only removes the old `MCPGODEBUG` env flag
+of the same name. `TestMCPAcceptsProxiedHost` still passes, so a public Host
+in front of the loopback listener does not 403.
+
+Verified before it landed: vet, the full suite, and `scripts/smoke.sh`.
+
 ## 0.26.2
 
 MCP works behind the reverse proxy again.
