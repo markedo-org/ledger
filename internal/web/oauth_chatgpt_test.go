@@ -31,6 +31,13 @@ func TestChatGPTOAuthStaysReadOnlyUntilRevoked(t *testing.T) {
 	if _, err := st.Bootstrap(context.Background(), "markedo", "meta", "maria", adminPlain); err != nil {
 		t.Fatal(err)
 	}
+	l, err := st.ResolveLedger(context.Background(), "markedo", "meta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetLedgerTitle(context.Background(), l.ID, "the one board people actually work"); err != nil {
+		t.Fatal(err)
+	}
 	a := app.New(st)
 	srv, err := New(a)
 	if err != nil {
@@ -99,6 +106,13 @@ func TestChatGPTOAuthStaysReadOnlyUntilRevoked(t *testing.T) {
 	if consent.StatusCode != http.StatusOK || !strings.Contains(consentHTML, "Allow read access") {
 		t.Fatalf("consent %d %s", consent.StatusCode, consentHTML)
 	}
+	if !strings.Contains(consentHTML, `value="meta">meta (the one board people actually work)`) {
+		t.Fatalf("picker showed the title instead of the slug: %s", consentHTML)
+	}
+	csp := consent.Header.Get("Content-Security-Policy")
+	if !strings.Contains(csp, "form-action 'self' https://chatgpt.com") {
+		t.Fatalf("consent CSP blocks the return to ChatGPT: %s", csp)
+	}
 	pending := attr(consentHTML, `name="pending" value="`)
 	csrf = attr(consentHTML, `name="csrf" value="`)
 	approve := url.Values{"csrf": {csrf}, "pending": {pending}, "ledger": {"meta"}}
@@ -110,6 +124,9 @@ func TestChatGPTOAuthStaysReadOnlyUntilRevoked(t *testing.T) {
 	loc := back.Header.Get("Location")
 	if back.StatusCode != http.StatusFound || !strings.HasPrefix(loc, redirectURI) {
 		t.Fatalf("redirect %d %s", back.StatusCode, loc)
+	}
+	if !strings.Contains(back.Header.Get("Content-Security-Policy"), "form-action 'self' https://chatgpt.com") {
+		t.Fatalf("redirect CSP blocks ChatGPT: %s", back.Header.Get("Content-Security-Policy"))
 	}
 	locURL, err := url.Parse(loc)
 	if err != nil {

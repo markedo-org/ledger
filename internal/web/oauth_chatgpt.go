@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -215,6 +217,7 @@ func (s *Server) oauthAuthorize(c *gin.Context) {
 }
 
 func (s *Server) oauthAuthorizePost(c *gin.Context) {
+	s.allowChatGPTReturn(c)
 	if !s.checkCSRF(c) {
 		s.renderOAuth(c, "That approval could not be completed. Start the connection again.", nil, "")
 		return
@@ -241,7 +244,15 @@ func (s *Server) oauthAuthorizePost(c *gin.Context) {
 	}
 	loc, err := s.App.ConsentOAuth(c.Request.Context(), tok, pendingID, c.PostForm("ledger"))
 	if err != nil {
-		s.renderOAuth(c, "That ledger could not be shared. Start the connection again.", nil, "")
+		// A second click lands here after the first one already minted the
+		// code and deleted the pending row. Saying the ledger could not be
+		// shared sent people back to the start of a grant that had worked.
+		msg := "That ledger could not be shared. Start the connection again."
+		if errors.Is(err, app.ErrUnauthorized) {
+			msg = "That approval was already sent to ChatGPT. If it did not connect, start the connection again from ChatGPT."
+		}
+		log.Printf("oauth consent: %v", err)
+		s.renderOAuth(c, msg, nil, "")
 		return
 	}
 	c.Redirect(http.StatusFound, loc)
@@ -309,7 +320,24 @@ func oauthTokenError(c *gin.Context, code string) {
 	c.JSON(http.StatusBadRequest, gin.H{"error": code})
 }
 
+// allowChatGPTReturn widens form-action on the consent page only. Chrome
+// applies that directive to the whole redirect chain after a form submit, so
+// form-action 'self' drops the 302 to chatgpt.com on the floor. The code is
+// minted, the browser never delivers it, and the next click finds no pending
+// grant. The global policy stays 'self'.
+func (s *Server) allowChatGPTReturn(c *gin.Context) {
+	h := c.Writer.Header()
+	csp := h.Get("Content-Security-Policy")
+	const from = "form-action 'self'"
+	const to = "form-action 'self' https://chatgpt.com"
+	if strings.Contains(csp, to) {
+		return
+	}
+	h.Set("Content-Security-Policy", strings.Replace(csp, from, to, 1))
+}
+
 func (s *Server) renderOAuth(c *gin.Context, message string, ledgers []types.Ledger, pending string) {
+	s.allowChatGPTReturn(c)
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	_ = s.tmpl.ExecuteTemplate(c.Writer, "oauth", s.page(c, gin.H{

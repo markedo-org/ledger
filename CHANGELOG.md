@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.1
+
+Chrome dropped the return to ChatGPT. The consent page sent
+`form-action 'self'`, and Chrome applies that to the redirect after the
+form, so the authorization code never left the browser. A second click
+then reported that the ledger could not be shared. That page now allows
+`https://chatgpt.com` on this response only. The picker shows the ledger
+slug, with the title after it.
+
 ## 0.27.0
 
 A ledger can be shared with ChatGPT as a permanent read-only client.

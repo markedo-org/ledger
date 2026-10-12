@@ -15,7 +15,7 @@
     <label for="ledger">Ledger</label>
     <select id="ledger" name="ledger" required>
       {{range .Ledgers}}
-      <option value="{{.Slug}}">{{if .Title}}{{.Title}}{{else}}{{.Slug}}{{end}}</option>
+      <option value="{{.Slug}}">{{.Slug}}{{if and .Title (ne .Title .Slug)}} ({{.Title}}){{end}}</option>
       {{end}}
     </select>
     <button type="submit">Allow read access</button>
