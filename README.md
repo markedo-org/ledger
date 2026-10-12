@@ -42,7 +42,8 @@ serves (same flags as before: `-listen`, `-db`).
 
 ## MCP
 
-Streamable HTTP at `/mcp`, same bearer token. Stateless. See
+Streamable HTTP at `/mcp`, same bearer token. Stateless. ChatGPT connects
+with OAuth and gets a ledger-bound read grant. See
 [`docs/mcp.md`](docs/mcp.md).
 
 A project-only agent gets one server, named for that ledger, with a

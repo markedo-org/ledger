@@ -97,6 +97,15 @@ func (a *App) Auth(ctx context.Context, token string) (types.Token, error) {
 		return types.Token{Actor: "operator", Role: types.RoleOperator}, nil
 	}
 	t, err := a.Store.LookupToken(ctx, token)
+	if err == nil {
+		return t, nil
+	}
+	if err != sql.ErrNoRows {
+		return types.Token{}, err
+	}
+	// ChatGPT never holds the read bearer. It holds a short-lived access
+	// token that resolves to one. A miss here is the same 401 as a bad bearer.
+	t, err = a.Store.LookupOAuthAccess(ctx, token, time.Now().UTC())
 	if err == sql.ErrNoRows {
 		return types.Token{}, ErrUnauthorized
 	}
@@ -147,6 +156,9 @@ type CreateInput struct {
 }
 
 func (a *App) Create(ctx context.Context, tok types.Token, owner, ledger string, in CreateInput) (types.Task, bool, error) {
+	if err := a.requireMutator(tok); err != nil {
+		return types.Task{}, false, err
+	}
 	l, err := a.Ledger(ctx, tok, owner, ledger)
 	if err != nil {
 		return types.Task{}, false, err
@@ -846,6 +858,17 @@ func (a *App) requireOperator(tok types.Token) error {
 	return nil
 }
 
+// requireMutator refuses a read token. Read is a real role on the token, not
+// a downgrade of someone else's session: review links still carry the role of
+// whatever minted them. A read token is how a client is allowed to look at
+// one ledger and is structurally unable to change it.
+func (a *App) requireMutator(tok types.Token) error {
+	if tok.Role == types.RoleRead {
+		return fmt.Errorf("%w: read tokens cannot change the ledger", ErrForbidden)
+	}
+	return nil
+}
+
 func (a *App) resolveOwner(ctx context.Context, tok types.Token, ownerSlug string) (types.Owner, error) {
 	if err := a.requireOwner(tok, ownerSlug); err != nil {
 		return types.Owner{}, err
@@ -865,7 +888,27 @@ func (a *App) ListLedgers(ctx context.Context, tok types.Token, ownerSlug string
 	if err != nil {
 		return nil, err
 	}
-	return a.Store.ListLedgers(ctx, o.ID)
+	ledgers, err := a.Store.ListLedgers(ctx, o.ID)
+	if err != nil {
+		return nil, err
+	}
+	return filterReadLedgers(tok, ledgers), nil
+}
+
+// filterReadLedgers hides sibling ledgers from a read token. A write token
+// bound to one ledger still lists the owner's other boards, which is the
+// behaviour agents already rely on. Read exists to share one board.
+func filterReadLedgers(tok types.Token, ledgers []types.Ledger) []types.Ledger {
+	if tok.Role != types.RoleRead || tok.LedgerSlug == "" {
+		return ledgers
+	}
+	out := make([]types.Ledger, 0, 1)
+	for _, l := range ledgers {
+		if l.Slug == tok.LedgerSlug {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 type CreateLedgerInput struct {
@@ -1012,8 +1055,8 @@ func (a *App) issueToken(ctx context.Context, tok types.Token, ownerSlug string,
 	if role == "" {
 		role = types.RoleWrite
 	}
-	if role != types.RoleWrite && role != types.RoleAdmin {
-		return IssuedToken{}, fmt.Errorf("%w: role must be write or admin", ErrInvalid)
+	if role != types.RoleWrite && role != types.RoleAdmin && role != types.RoleRead {
+		return IssuedToken{}, fmt.Errorf("%w: role must be write, read, or admin", ErrInvalid)
 	}
 	var ledgerID string
 	if strings.TrimSpace(in.Ledger) != "" {
@@ -1028,6 +1071,11 @@ func (a *App) issueToken(ctx context.Context, tok types.Token, ownerSlug string,
 			return IssuedToken{}, ErrForbidden
 		}
 		ledgerID = l.ID
+	}
+	// Owner-wide read would include every ledger under the owner. The point of
+	// the role is to hand one board to a client and not the one next to it.
+	if role == types.RoleRead && ledgerID == "" {
+		return IssuedToken{}, fmt.Errorf("%w: a read token must be bound to one ledger", ErrInvalid)
 	}
 	plain, err := store.NewToken()
 	if err != nil {

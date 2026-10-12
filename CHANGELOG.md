@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.27.0
+
+A ledger can be shared with ChatGPT as a permanent read-only client.
+
+ChatGPT's plugin form will not send a static bearer, and a review link
+expires. Role `read` is a ledger-bound token that can list and get tasks
+and cannot create, claim, note, or close. It has to name one ledger, so a
+grant for one board cannot see the board next to it. Review links are
+unchanged: they still carry the role of the token that minted them.
+
+`/mcp` advertises OAuth when `LEDGER_PUBLIC_URL` is set. An owner admin
+approves one ledger. That mints a read token with actor `chatgpt` and
+throws the plaintext away. ChatGPT holds a one-hour access token and a
+refresh token, so the connection stays up until `ledger token revoke` on
+that read token. The client allowlist is ChatGPT's published client
+metadata. A read token's MCP server lists only `list_ledgers`,
+`list_tasks`, and `get_task`, marked read-only.
+
 ## 0.26.3
 
 Dependencies. The server is unchanged.

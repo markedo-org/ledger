@@ -43,6 +43,10 @@ Two setups:
 2. An agent that only works one project. Give it only a ledger-bound write
    token, in a server named for that project. Do not give it the owner
    admin token.
+3. A web client that should only look, such as ChatGPT. Do not paste a
+   bearer into it. The owner admin connects it at `/mcp` with OAuth. That
+   mints a ledger-bound **read** token with actor `chatgpt`. Revoke that
+   token to disconnect. A read token cannot create, claim, note, or close.
 
 `list_tasks` is a thin index (handle, title, phase, size, tags, claimant).
 Default list hides DONE older than the ledger's archive window. Pass

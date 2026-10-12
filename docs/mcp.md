@@ -8,7 +8,7 @@ task-ledger exposes a remote MCP server over **Streamable HTTP**.
 | Transport | Streamable HTTP, **stateless**, JSON responses |
 | SDK | `github.com/modelcontextprotocol/go-sdk` v1.2.0 (official) |
 | Protocol | 2025-06-18 |
-| Auth | `Authorization: Bearer` (same tokens as the HTTP API) |
+| Auth | `Authorization: Bearer` (same tokens as the HTTP API). ChatGPT connects with OAuth and receives a ledger-bound read grant. See below. |
 
 Not stdio. Not a wrapper around a CLI. Not the legacy SSE transport.
 
@@ -56,6 +56,30 @@ signup token). With several ledgers, pass `ledger` or mint a bound token.
 Install the agent skill with `npx skills add markedo-org/ledger -s task-ledger`.
 See `.agents/skills/task-ledger/`.
 
+## ChatGPT, read-only
+
+ChatGPT's web UI can attach a remote MCP server, and it will not send a
+static bearer. It speaks OAuth. `LEDGER_PUBLIC_URL` must be the public
+https origin, because that value is the issuer and the resource
+(`{origin}/mcp`).
+
+In ChatGPT: Plugins, Add custom MCP server, URL `{origin}/mcp`,
+authentication OAuth. Sign in with the **owner admin** token when asked,
+and pick one ledger. The grant is a ledger-bound read token with actor
+`chatgpt`. ChatGPT receives short-lived access tokens and a refresh token,
+so the connection stays up until that read token is revoked (`ledger token
+list`, then `ledger token revoke`). The plaintext of the read token is
+never shown. A read token's MCP server advertises only `list_ledgers`,
+`list_tasks`, and `get_task`, and the API refuses every mutation.
+
+The client allowlist is ChatGPT's published client metadata
+(`https://chatgpt.com/oauth/client.json` and the per-connection
+`/oauth/{callback}/client.json`). Other hosts are refused.
+
+Review links are unchanged: they still carry the role of the token that
+minted them. Read is a token you mint on purpose, not a downgrade of a
+review session.
+
 ## Tools
 
 `list_ledgers`, `create_ledger`, `create_token`, `list_tokens`, `revoke_token`,
@@ -67,7 +91,7 @@ See `.agents/skills/task-ledger/`.
 
 `create_owner` and `set_max_ledgers` need the operator token
 (`LEDGER_OPERATOR_TOKEN`). `create_ledger` and `create_token` accept owner admin
-or operator; the operator may mint role write but not admin for an owner that
+or operator; the operator may mint role write or read but not admin for an owner that
 already exists. `list_tokens`, `revoke_token`, and `reset_ledger` are owner admin
 only. A ledger-bound write token is refused for token list and revoke. `reset_ledger` requires `confirm` equal to
 `owner/ledger`. It wipes every task and restarts the series at T-001.

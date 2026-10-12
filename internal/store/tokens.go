@@ -86,6 +86,8 @@ func (s *Store) RevokeToken(ctx context.Context, ownerID, tokenID string) (types
 			`DELETE FROM sessions WHERE token_id = ?`,
 			`DELETE FROM magic_links WHERE token_id = ?`,
 			`DELETE FROM review_links WHERE token_id = ?`,
+			`DELETE FROM oauth_access WHERE grant_id IN (SELECT id FROM oauth_grants WHERE token_id = ?)`,
+			`DELETE FROM oauth_grants WHERE token_id = ?`,
 		} {
 			if _, err := tx.ExecContext(ctx, q, tokenID); err != nil {
 				return err

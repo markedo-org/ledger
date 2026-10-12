@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -21,15 +22,16 @@ import (
 )
 
 type Server struct {
-	App     *app.App
-	Auth    AuthConfig
-	GitHub  GitHub
-	Root    RootConfig
-	SiteURL string
-	tmpl    *template.Template
-	static  fs.FS
-	signIn  *signInGate
-	csp     string
+	App          *app.App
+	Auth         AuthConfig
+	GitHub       GitHub
+	Root         RootConfig
+	SiteURL      string
+	tmpl         *template.Template
+	static       fs.FS
+	signIn       *signInGate
+	csp          string
+	OAuthClients func(ctx context.Context, clientID string) ([]string, error)
 }
 
 func New(a *app.App) (*Server, error) {
@@ -80,6 +82,12 @@ func (s *Server) Engine() *gin.Engine {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
+	r.GET("/.well-known/oauth-protected-resource", s.oauthProtectedResource)
+	r.GET("/.well-known/oauth-protected-resource/mcp", s.oauthProtectedResource)
+	r.GET("/.well-known/oauth-authorization-server", s.oauthAuthorizationServer)
+	r.GET("/oauth/authorize", s.oauthAuthorize)
+	r.POST("/oauth/authorize", s.oauthAuthorizePost)
+	r.POST("/oauth/token", s.throttleSignIn, s.oauthToken)
 	r.GET("/login", s.login)
 	r.POST("/login", s.throttleSignIn, s.loginPost)
 	r.GET("/login/email", s.throttleSignIn, s.loginEmailGet)

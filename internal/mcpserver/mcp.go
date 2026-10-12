@@ -35,7 +35,7 @@ func Handler(a *app.App) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, err := a.Auth(r.Context(), bearer(r))
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="task-ledger"`)
+			w.Header().Set("WWW-Authenticate", a.WWWAuthenticate())
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -59,13 +59,53 @@ func bearer(r *http.Request) string {
 	return strings.TrimSpace(t)
 }
 
+const readInstructions = "Read-only. Use list_tasks for the index and get_task before you rely on a row. You cannot create, claim, note, or close tasks. This grant stays until the owner revokes the read token whose actor is chatgpt."
+
+func readAnnotations() *mcp.ToolAnnotations {
+	closed := false
+	return &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closed}
+}
+
+func registerReadTools(s *mcp.Server, h *host) {
+	ann := readAnnotations()
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "list_ledgers",
+		Description: "List the one ledger this read token can see.",
+		Annotations: ann,
+	}, h.listLedgers)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "list_tasks",
+		Description: "List tasks in a ledger (handle, title, phase, size, tags, claimant). Thin index only: get_task before you act. Default list hides DONE older than archive_done_after_days (7 unless the ledger overrides). Pass done=true for every DONE task, and only those. Pass tag to keep tasks with that slug.",
+		Annotations: ann,
+	}, h.listTasks)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get_task",
+		Description: "Get one task by handle (T-001), including body, notes, checks, and claim state. Does not return claim_id.",
+		Annotations: ann,
+	}, h.getTask)
+	s.AddResource(&mcp.Resource{
+		URI:         "ledger://live",
+		Name:        "Live ledger snapshot",
+		Description: "Markdown snapshot of the token's ledger. Read-only. Do not treat this as a write path.",
+		MIMEType:    "text/markdown",
+	}, h.readLive)
+}
+
 func newServer(a *app.App, tok types.Token) *mcp.Server {
 	serverVersion := a.Version
 	if serverVersion == "" {
 		serverVersion = "dev"
 	}
-	s := mcp.NewServer(&mcp.Implementation{Name: "task-ledger", Version: serverVersion}, nil)
+	var opts *mcp.ServerOptions
+	if tok.Role == types.RoleRead {
+		opts = &mcp.ServerOptions{Instructions: readInstructions}
+	}
+	s := mcp.NewServer(&mcp.Implementation{Name: "task-ledger", Version: serverVersion}, opts)
 	h := &host{app: a, tok: tok}
+	if tok.Role == types.RoleRead {
+		registerReadTools(s, h)
+		return s
+	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_ledgers",
 		Description: "List ledgers for an owner. Defaults to the token's owner.",
@@ -265,7 +305,7 @@ type createTokenIn struct {
 	Owner  string `json:"owner,omitempty" jsonschema:"Owner slug. Defaults to the token's owner."`
 	Actor  string `json:"actor" jsonschema:"Actor name baked into the token, for example batty"`
 	Ledger string `json:"ledger,omitempty" jsonschema:"Bind to this ledger. Omit for an owner-scoped token."`
-	Role   string `json:"role,omitempty" jsonschema:"write or admin. Default write."`
+	Role   string `json:"role,omitempty" jsonschema:"write, read, or admin. Default write. read must set ledger."`
 	Email  string `json:"email,omitempty" jsonschema:"Optional email for magic-link sign-in. One token per address."`
 }
 

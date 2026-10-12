@@ -25,6 +25,7 @@ func Token(args []string) int {
 func tokenUsage() int {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  ledger token mint --actor name [--ledger slug] [--role write] [--email you@example.com]")
+	fmt.Fprintln(os.Stderr, "  role is write, read, or admin. read requires --ledger.")
 	fmt.Fprintln(os.Stderr, "  ledger token list [--owner slug]")
 	fmt.Fprintln(os.Stderr, "  ledger token revoke --id <token id> [--owner slug]")
 	fmt.Fprintln(os.Stderr)
@@ -102,7 +103,7 @@ func tokenMint(args []string) int {
 	owner := fs.String("owner", "", "owner slug (default from profile)")
 	actor := fs.String("actor", "", "actor name")
 	ledger := fs.String("ledger", "", "bind to this ledger (omit for owner-scoped)")
-	role := fs.String("role", "write", "write or admin")
+	role := fs.String("role", "write", "write, read, or admin")
 	email := fs.String("email", "", "optional email for magic-link")
 	if err := fs.Parse(args); err != nil {
 		return 2

@@ -86,6 +86,11 @@ const (
 	RoleWrite    = "write"
 	RoleAdmin    = "admin"
 	RoleOperator = "operator"
+	// RoleRead is a ledger-bound bearer that can list and get tasks and nothing
+	// else. It exists so a web client such as ChatGPT can be connected without
+	// handing it a write token. Owner-wide read is refused: one grant must not
+	// be able to see a sibling ledger.
+	RoleRead = "read"
 )
 
 type Token struct {

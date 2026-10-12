@@ -1,0 +1,27 @@
+{{define "oauth"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand">{{template "mark"}}task-ledger</h1>
+  <div class="meta">{{template "appearance"}}</div>
+</header>
+<main class="gate-main">
+  <h2>Share a ledger with ChatGPT</h2>
+  {{if .Message}}<p class="notice" role="status">{{.Message}}</p>{{end}}
+  {{if .Pending}}
+  <p>ChatGPT will be able to read tasks on the ledger you pick, including titles, notes, and checks. It cannot create, claim, or close anything. The connection stays until you revoke the read token whose actor is chatgpt.</p>
+  <form class="signin" method="post" action="/oauth/authorize">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="pending" value="{{.Pending}}">
+    <label for="ledger">Ledger</label>
+    <select id="ledger" name="ledger" required>
+      {{range .Ledgers}}
+      <option value="{{.Slug}}">{{if .Title}}{{.Title}}{{else}}{{.Slug}}{{end}}</option>
+      {{end}}
+    </select>
+    <button type="submit">Allow read access</button>
+    <button type="submit" name="deny" value="1">Refuse</button>
+  </form>
+  {{end}}
+</main>
+{{template "foot" .}}
+{{end}}

@@ -151,3 +151,12 @@ provider, and an address on that domain. A personal mailbox as the sender lands
 in spam and puts that mailbox's password on the server.
 
 The email form is hidden when SMTP is off.
+
+## ChatGPT OAuth (read-only)
+
+API and MCP bearers are unchanged. ChatGPT cannot send one, so `/mcp`
+also advertises OAuth when `LEDGER_PUBLIC_URL` is set. The owner admin
+approves a single ledger. That mints a ledger-bound `read` token (actor
+`chatgpt`) whose plaintext is discarded. ChatGPT holds a one-hour access
+token and a refresh token. Revoke the read token and both stop. See
+`docs/mcp.md`.

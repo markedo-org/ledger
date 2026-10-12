@@ -18,6 +18,7 @@ var reservedOwnerSlugs = map[string]bool{
 	"login":  true,
 	"logout": true,
 	"mcp":    true,
+	"oauth":  true,
 	"owners": true,
 	"static": true,
 	"v1":     true,
@@ -136,7 +137,16 @@ func (a *App) GetOwner(ctx context.Context, tok types.Token, ownerSlug string) (
 		}
 	}
 	infos, err := a.ledgersWithFreeze(ctx, o)
-	return o, infos, err
+	if err != nil || tok.Role != types.RoleRead || tok.LedgerSlug == "" {
+		return o, infos, err
+	}
+	one := make([]LedgerInfo, 0, 1)
+	for _, info := range infos {
+		if info.Slug == tok.LedgerSlug {
+			one = append(one, info)
+		}
+	}
+	return o, one, nil
 }
 
 func (a *App) ListOwners(ctx context.Context, tok types.Token) ([]types.Owner, error) {
@@ -207,6 +217,9 @@ func (a *App) requireWritable(ctx context.Context, l types.Ledger) error {
 }
 
 func (a *App) loadForWrite(ctx context.Context, tok types.Token, owner, ledger, handle string) (types.Task, error) {
+	if err := a.requireMutator(tok); err != nil {
+		return types.Task{}, err
+	}
 	t, err := a.Get(ctx, tok, owner, ledger, handle)
 	if err != nil {
 		return t, err

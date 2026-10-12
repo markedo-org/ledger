@@ -70,7 +70,7 @@ Both trim surrounding whitespace, so a file with a trailing newline is fine.
 | `ledger ledger list` | Owner admin or operator |
 | `ledger ledger set --slug [--title] [--archive-done-after-days N] [--purge-done-after-days N]` | Owner admin. Title and per-ledger DONE retention. `0` means never |
 | `ledger ledger reset --slug --confirm owner/ledger` | Owner admin. Wipes tasks and restarts at T-001. Tokens stay. |
-| `ledger token mint --actor [--ledger] [--role write] [--email]` | Owner admin. Operator may mint role write only. Returns plaintext and id once. |
+| `ledger token mint --actor [--ledger] [--role write] [--email]` | Owner admin. Role is `write`, `read`, or `admin`. `read` requires `--ledger`. Operator may mint write or read, not admin. Returns plaintext and id once. |
 | `ledger token list [--owner slug] [--profile name]` | Owner admin. Id and metadata only. |
 | `ledger token revoke --id <token id> [--owner slug] [--profile name]` | Owner admin. Irreversible. A token cannot revoke itself. |
 

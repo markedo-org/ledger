@@ -23,7 +23,7 @@ Until 1.0, the first number stays 0.
 - CLI verbs: `init`, `serve`, `mcp`, `skill`, `config`, `owner`, `ledger`,
   `token`
 - `~/.ledger/config` keys: `url`, `token`, `owner`, `ledger`
-- Token shapes: owner-scoped admin, ledger-bound write, operator
+- Token shapes: owner-scoped admin, ledger-bound write, ledger-bound read, operator
 
 Adding optional fields, new tools, or new CLI verbs is allowed in 1.x.
 Renaming or removing the list above is not.
@@ -40,7 +40,7 @@ Renaming or removing the list above is not.
 
 **Not required for 1.0:**
 
-- MCP OAuth for ChatGPT / Claude on the web
+- MCP OAuth beyond the ChatGPT read-only grant shipped in 0.27.0 (Claude is not on the client allowlist)
 - GitHub or magic-link login on self-host
 - Homebrew, winget, or apt
 - A guarantee that hosted will run forever
