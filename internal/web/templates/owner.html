@@ -14,14 +14,30 @@
     {{end}}
   </p>
   {{end}}
-  {{if .SiteURL}}
-  <p class="mast-actions">
-    {{if .Unused}}<a href="{{.SiteURL}}/billing">Create another ledger</a>{{else}}<a href="{{.SiteURL}}/billing">Add capacity</a>{{end}}
-  </p>
+  {{if and .CanCreate .Unused}}
+  <form class="settings" method="post" action="/{{.Owner}}">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field">
+      <label for="slug">Ledger</label>
+      <input id="slug" name="slug" required value="{{.FormSlug}}" maxlength="63" autocomplete="off" pattern="[a-z0-9][a-z0-9-]{0,62}">
+      <p class="hint">Usually the repository or project name.</p>
+    </div>
+    <div class="field">
+      <label for="ledger-title">Title</label>
+      <input id="ledger-title" name="title" value="{{.FormTitle}}" maxlength="120" autocomplete="off">
+      <p class="hint">Shown next to the slug. Leave blank to show only the slug.</p>
+    </div>
+    <button type="submit">Create ledger</button>
+  </form>
+  {{else if and (not .SignedIn) .Unused}}
+  <p class="mast-actions"><a href="/login?next=/{{.Owner}}">Sign in</a> to create a ledger.</p>
+  {{else if and .SiteURL .MaxLedgers (not .Unused)}}
+  <p class="mast-actions"><a href="{{.SiteURL}}/billing">Add capacity</a></p>
   {{else if and .MaxLedgers (not .Unused)}}
   <p class="mast-actions">This cap is full. Raise max_ledgers on the host to add another board.</p>
   {{end}}
 </header>
+{{if .Message}}<p class="flash" role="alert">{{.Message}}</p>{{end}}
 {{if .Ledgers}}
 <ol class="register">
   {{range .Ledgers}}
@@ -47,7 +63,7 @@
   {{end}}
 </ol>
 {{else}}
-<p class="empty">No ledgers yet.{{if .SiteURL}} <a href="{{.SiteURL}}/billing">Create the first one</a>.{{end}}</p>
+<p class="empty">No ledgers yet.</p>
 {{end}}
 {{template "foot" .}}
 {{end}}

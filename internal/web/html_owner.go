@@ -1,6 +1,8 @@
 package web
 
 import (
+	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -59,6 +61,120 @@ func canManageLedger(sess types.Session, ok bool, owner, ledger string) bool {
 		return true
 	}
 	return ledger != "" && sess.LedgerSlug == ledger
+}
+
+func (s *Server) htmlOwnerPost(c *gin.Context) {
+	owner := c.Param("owner")
+	slug := strings.ToLower(strings.TrimSpace(c.PostForm("slug")))
+	title := strings.TrimSpace(c.PostForm("title"))
+	if !s.checkCSRF(c) {
+		s.renderOwnerMsg(c, owner, "That form could not be completed. Reload the page and try again.", slug, title)
+		return
+	}
+	sess, ok := s.sessionFrom(c)
+	if !canManageLedger(sess, ok, owner, "") {
+		s.htmlErr(c, app.ErrForbidden)
+		return
+	}
+	tok, err := s.tokenFromSession(c, sess)
+	if err != nil {
+		s.htmlErr(c, err)
+		return
+	}
+	l, err := s.App.CreateLedger(c.Request.Context(), tok, owner, app.CreateLedgerInput{Slug: slug, Title: title})
+	if err != nil {
+		s.renderOwnerMsg(c, owner, createLedgerMessage(err), slug, title)
+		return
+	}
+	issued, err := s.App.MintProjectWrite(c.Request.Context(), tok, owner, l.Slug, app.ProjectActor(tok, ""))
+	if err != nil {
+		log.Printf("mint project write for %s/%s: %v", owner, l.Slug, err)
+	}
+	plain := ""
+	if issued != nil {
+		plain = issued.Plain
+	}
+	c.Status(http.StatusOK)
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(c.Writer, "created", s.page(c, gin.H{
+		"Title":      owner + "/" + l.Slug,
+		"Owner":      owner,
+		"Ledger":     l.Slug,
+		"WriteToken": plain,
+	})); err != nil {
+		log.Printf("template: %v", err)
+	}
+}
+
+func createLedgerMessage(err error) string {
+	switch {
+	case errors.Is(err, app.ErrConflict):
+		return "That ledger name is taken."
+	case errors.Is(err, app.ErrPolicy):
+		return "The cap is full."
+	case errors.Is(err, app.ErrInvalid):
+		return "Ledger must be lowercase letters, digits, or hyphens."
+	default:
+		return "Could not create the ledger."
+	}
+}
+
+func (s *Server) renderOwnerMsg(c *gin.Context, owner, message, slug, title string) {
+	o, ledgers, err := s.App.PublicOwner(c.Request.Context(), owner)
+	if err != nil {
+		s.htmlErr(c, err)
+		return
+	}
+	s.renderOwner(c, o, ledgers, message, slug, title)
+}
+
+func (s *Server) renderOwner(c *gin.Context, o types.Owner, ledgers []app.LedgerInfo, message, formSlug, formTitle string) {
+	owner := o.Slug
+	used := len(ledgers)
+	sess, signedIn := s.sessionFrom(c)
+	if signedIn && sess.LedgerSlug != "" {
+		filtered := ledgers[:0]
+		for _, l := range ledgers {
+			if l.Slug == sess.LedgerSlug {
+				filtered = append(filtered, l)
+			}
+		}
+		ledgers = filtered
+	}
+	unused := 0
+	if o.MaxLedgers > 0 && o.MaxLedgers > used {
+		unused = o.MaxLedgers - used
+	}
+	// Decided per row. An owner-wide admin manages all of them, an admin bound
+	// to one ledger manages that one, and everybody else manages none.
+	type ledgerRow struct {
+		app.LedgerInfo
+		CanManage bool
+	}
+	rows := make([]ledgerRow, 0, len(ledgers))
+	ownerWide := canManageLedger(sess, signedIn, owner, "")
+	for _, l := range ledgers {
+		rows = append(rows, ledgerRow{LedgerInfo: l, CanManage: canManageLedger(sess, signedIn, owner, l.Slug)})
+	}
+	c.Status(http.StatusOK)
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(c.Writer, "owner", s.page(c, gin.H{
+		"Title":         owner,
+		"Owner":         owner,
+		"Ledgers":       rows,
+		"MaxLedgers":    o.MaxLedgers,
+		"Used":          used,
+		"Unused":        unused,
+		"CanCreate":     ownerWide,
+		"CanManage":     ownerWide,
+		"SignedIn":      signedIn,
+		"SessionLedger": sess.LedgerSlug,
+		"Message":       message,
+		"FormSlug":      formSlug,
+		"FormTitle":     formTitle,
+	})); err != nil {
+		log.Printf("template: %v", err)
+	}
 }
 
 func (s *Server) htmlLedgerSettings(c *gin.Context) {

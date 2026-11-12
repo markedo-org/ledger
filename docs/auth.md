@@ -76,7 +76,8 @@ Set `LEDGER_SECURE_COOKIES=1` behind HTTPS.
 | Path | What |
 | --- | --- |
 | `GET /owners` | Signed-in home: owners this session may see. Operator and GitHub allowlist see every owner. |
-| `GET /:owner` | Ledgers under that owner. Billing link only if `LEDGER_SITE_URL` is set. Owner sessions only: a host session sees an owner's ledgers on `/admin` instead. |
+| `GET /:owner` | Ledgers under that owner. An owner-wide admin session creates the next ledger here while capacity remains. Billing (`LEDGER_SITE_URL`) is linked only when the cap is full. A host session sees an owner's ledgers on `/admin` instead. |
+| `POST /:owner` | Create a ledger. Owner-wide admin session only. Mints a ledger-bound write token and shows it once. |
 | `GET /:owner/:ledger/settings` | Edit title and DONE retention. Owner-admin session only. |
 | `GET /:owner/:ledger` | Live task view. |
 | `GET /login` | Token form. Email form if SMTP is set. GitHub link if OAuth is configured. Sets a CSRF cookie. |

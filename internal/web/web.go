@@ -138,6 +138,7 @@ func (s *Server) Engine() *gin.Engine {
 	r.POST("/admin", s.operatorGate, s.htmlAdminPost)
 	r.GET("/owners", s.htmlGate, s.htmlOwners)
 	r.GET("/:owner", s.htmlGate, s.htmlOwner)
+	r.POST("/:owner", s.htmlGate, s.htmlOwnerPost)
 	r.GET("/:owner/:ledger/settings", s.htmlGate, s.htmlLedgerSettings)
 	r.POST("/:owner/:ledger/settings", s.htmlGate, s.htmlLedgerSettingsPost)
 	r.GET("/:owner/:ledger", s.htmlGate, s.htmlLedger)
@@ -721,47 +722,7 @@ func (s *Server) htmlOwner(c *gin.Context) {
 		s.htmlErr(c, err)
 		return
 	}
-	used := len(ledgers)
-	sess, signedIn := s.sessionFrom(c)
-	if signedIn && sess.LedgerSlug != "" {
-		filtered := ledgers[:0]
-		for _, l := range ledgers {
-			if l.Slug == sess.LedgerSlug {
-				filtered = append(filtered, l)
-			}
-		}
-		ledgers = filtered
-	}
-	unused := 0
-	if o.MaxLedgers > 0 && o.MaxLedgers > used {
-		unused = o.MaxLedgers - used
-	}
-	// Decided per row. An owner-wide admin manages all of them, an admin bound
-	// to one ledger manages that one, and everybody else manages none. Asking
-	// the owner-wide question once and reusing the answer is what left the page
-	// offering Settings to sessions the handler then refused.
-	type ledgerRow struct {
-		app.LedgerInfo
-		CanManage bool
-	}
-	rows := make([]ledgerRow, 0, len(ledgers))
-	for _, l := range ledgers {
-		rows = append(rows, ledgerRow{LedgerInfo: l, CanManage: canManageLedger(sess, signedIn, owner, l.Slug)})
-	}
-	c.Status(http.StatusOK)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(c.Writer, "owner", s.page(c, gin.H{
-		"Title":         owner,
-		"Owner":         owner,
-		"Ledgers":       rows,
-		"MaxLedgers":    o.MaxLedgers,
-		"Used":          used,
-		"Unused":        unused,
-		"CanManage":     canManageLedger(sess, signedIn, owner, ""),
-		"SessionLedger": sess.LedgerSlug,
-	})); err != nil {
-		log.Printf("template: %v", err)
-	}
+	s.renderOwner(c, o, ledgers, "", "", "")
 }
 
 func (s *Server) htmlLedger(c *gin.Context) {

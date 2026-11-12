@@ -13,7 +13,7 @@ and is not the series.
 ## Interfaces
 
 1. HTTP API (the system).
-2. HTML live view. Boards stay read-only. Owner-admin sessions may edit ledger title and retention.
+2. HTML live view. Boards stay read-only. An owner-wide admin session may create a ledger while the cap has room, and may edit a ledger's title and retention. Buying more capacity is the billing site, and only when the cap is full.
 3. Skill: conventions (do not edit the snapshot, claim before you work, bearer
    token, this repo's owner/ledger).
 4. MCP, Streamable HTTP at `/mcp`, over the same domain layer. Copy-paste attach

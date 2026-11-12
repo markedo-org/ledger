@@ -324,7 +324,8 @@ func TestOwnerPageAndLedgerSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok); err != nil {
+	boot, err := s.Bootstrap(context.Background(), "markedo", "meta", "maria", tok)
+	if err != nil {
 		t.Fatal(err)
 	}
 	a := app.New(s)
@@ -352,8 +353,12 @@ func TestOwnerPageAndLedgerSettings(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/markedo", nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), `href="https://www.task-ledger.com/billing"`) {
-		t.Fatalf("billing missing: %s", rec.Body.String())
+	page = rec.Body.String()
+	if strings.Contains(page, "/billing") {
+		t.Fatal("open capacity must not link to billing")
+	}
+	if !strings.Contains(page, `href="/login?next=/markedo"`) {
+		t.Fatalf("sign-in link missing: %s", page)
 	}
 
 	body := bytes.NewBufferString(`{"title":"The meta board"}`)
@@ -387,6 +392,64 @@ func TestOwnerPageAndLedgerSettings(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), `/markedo/meta/settings`) {
 		t.Fatalf("settings link missing: %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `name="slug"`) {
+		t.Fatal("a ledger-bound admin must not see the create form")
+	}
+
+	widePlain, err := store.NewToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateToken(context.Background(), boot.Owner.ID, "lg", "", "admin", "", widePlain); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/login", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	csrf = cookieVal(rec, "ledger_csrf")
+	form = strings.NewReader("token=" + widePlain + "&csrf=" + csrf)
+	req = httptest.NewRequest(http.MethodPost, "/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "ledger_csrf", Value: csrf})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	wide := cookieVal(rec, "ledger_session")
+	if wide == "" {
+		t.Fatal("missing owner-wide session")
+	}
+	req = httptest.NewRequest(http.MethodGet, "/markedo", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: wide})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	page = rec.Body.String()
+	if !strings.Contains(page, `name="slug"`) || strings.Contains(page, "/billing") {
+		t.Fatalf("owner-wide session should create here, not via billing: %s", page)
+	}
+	csrf = cookieVal(rec, "ledger_csrf")
+	createVals := url.Values{"csrf": {csrf}, "slug": {"parallax"}, "title": {"Parallax"}}
+	req = httptest.NewRequest(http.MethodPost, "/markedo", strings.NewReader(createVals.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: wide})
+	req.AddCookie(&http.Cookie{Name: "ledger_csrf", Value: csrf})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "lgr_") {
+		t.Fatalf("create ledger %d %s", rec.Code, rec.Body.String())
+	}
+	if err := s.SetMaxLedgers(context.Background(), boot.Owner.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/markedo", nil)
+	req.AddCookie(&http.Cookie{Name: "ledger_session", Value: wide})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	page = rec.Body.String()
+	if strings.Contains(page, `name="slug"`) || !strings.Contains(page, `href="https://www.task-ledger.com/billing"`) {
+		t.Fatalf("full cap should offer billing, not a create form: %s", page)
+	}
+	if err := s.SetMaxLedgers(context.Background(), boot.Owner.ID, 8); err != nil {
+		t.Fatal(err)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/markedo/meta/settings", nil)

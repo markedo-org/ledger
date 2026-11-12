@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.2
+
+An owner with open ledger slots creates the next board on the owner page.
+The write token is shown once. Billing is only the way to raise a full cap.
+The old "Create another ledger" link sent every open slot to the billing
+site, including accounts that already had room.
+
 ## 0.27.1
 
 Chrome dropped the return to ChatGPT. The consent page sent

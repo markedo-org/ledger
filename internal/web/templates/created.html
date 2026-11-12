@@ -1,0 +1,15 @@
+{{define "created"}}
+{{template "head" .}}
+<header class="mast">
+  <h1 class="brand">{{template "mark"}}{{.Owner}}/{{.Ledger}}</h1>
+  <div class="meta">task-ledger · new ledger {{template "appearance"}}</div>
+  <p>This write token is bound to this board. Copy it now. It is shown once. Name its MCP server <code>task-ledger-{{.Ledger}}</code>.</p>
+</header>
+{{if .WriteToken}}
+<pre><code>{{.WriteToken}}</code></pre>
+{{else}}
+<p class="flash" role="alert">The ledger exists. No write token was minted. Create one from the owner admin token.</p>
+{{end}}
+<p class="mast-actions"><a href="/{{.Owner}}/{{.Ledger}}">Open the board</a> · <a href="/{{.Owner}}">Back to {{.Owner}}</a></p>
+{{template "foot" .}}
+{{end}}
